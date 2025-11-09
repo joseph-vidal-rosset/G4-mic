@@ -399,7 +399,7 @@ rewrite((![X-X]:A), J, K, (' \\forall ' X ' ' C)) :-
 rewrite((?[X-X]:A), J, K, (' \\exists ' X ' ' C)) :-
     !,
     rewrite(A, J, K, C).
-
+/*
 % QUANTIFICATEURS : Adapter les formules directement
 rewrite((![_X]:A), J, K, (' \\forall ' VarName ' ' C)) :-
     !,
@@ -412,7 +412,14 @@ rewrite((?[_X]:A), J, K, (' \\exists ' VarName ' ' C)) :-
     rewrite_name(J, VarName),
     J1 is J + 1,
     rewrite(A, J1, K, C).
+*/
+rewrite((![X]:A), J, K, (' \\forall ' X ' ' C)) :-
+    !,
+    rewrite(A, J, K, C).  % Garder le même compteur
 
+rewrite((?[X]:A), J, K, (' \\exists ' X ' ' C)) :-
+    !,
+    rewrite(A, J, K, C).  % Garder le même compteur
 % =========================================================================
 % SIMPLIFICATION ELEGANTE DES PREDICATS
 % P(x,y,z) -> Pxyz pour tous les predicats
