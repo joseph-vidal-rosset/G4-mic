@@ -8,10 +8,6 @@
 %==========================================================================
 % AXIOMS
 %=========================================================================
-% =========================================================================
-% DEBUG RULE - A AJOUTER TEMPORAIREMENT
-% =========================================================================
-
 % O.0 Ax 
 prove(G > D, _, _, J, J, _, ax(G>D, ax)) :-
     member(A, G),
@@ -26,13 +22,6 @@ prove(G > D, _, _, J, J, _, ax(G>D, ax)) :-
 prove(G>D, _, _, J, J, LogicLevel, lbot(G>D, #)) :-
     member(LogicLevel, [intuitionistic, classical]),
     member(#, G), !.
-  % 7. IP (Indirect Proof - THE classical law). 
-prove(G>D, FV, I, J, K, classical, ip(G>D, P)) :-
-    D = [A],  % Any goal A (not just bottom)
-    A \= #,   % Not already bottom
-    \+ member((A => #), G),  % not-A not already in context
-    I > 0,
-    prove([(A => #)|G]>[#], FV, I, J, K, classical, P).
 % =========================================================================
 %  PROPOSITIONAL RULES
 % =========================================================================
@@ -59,6 +48,13 @@ prove(G>D, FV, I, J, K, LogicLevel, tne(G>D, P)) :-
     Depth >= 2,  % At least 2 more negations than the goal
     !,
     prove([A|G]>[B], FV, I, J, K, LogicLevel, P).
+% 7. IP (Indirect Proof - THE classical law). 
+prove(G>D, FV, I, J, K, classical, ip(G>D, P)) :-
+    D = [A],  % Any goal A (not just bottom)
+    A \= #,   % Not already bottom
+    \+ member((A => #), G),  % not-A not already in context
+    I > 0,
+    prove([(A => #)|G]>[#], FV, I, J, K, classical, P).
 % 4. Lv-> (OPTIMIZED)
 prove(G>D, FV, I, J, K, LogicLevel, lorto(G>D,P)) :-
     select(((A|B)=>C),G,G1), !,
@@ -266,27 +262,6 @@ is_nested_negation(Target, Target, 0) :- !.
 is_nested_negation((Inner => #), Target, N) :-
     is_nested_negation(Inner, Target, N1),
     N is N1 + 1.
-
-  /*
-% Helper: check if Term contains SubTerm
-contains_term(SubTerm, Term) :-
-    SubTerm == Term, !.
-contains_term(SubTerm, Term) :-
-    compound(Term),
-    Term =.. [_|Args],
-    member(Arg, Args),
-    contains_term(SubTerm, Arg).
-
-% Helper: substitute Old with New in Term
-substitute_term(Old, New, Term, New) :-
-    Old == Term, !.
-substitute_term(Old, New, Term, Result) :-
-    compound(Term),
-    Term =.. [Functor|Args],
-    maplist(substitute_term(Old, New), Args, NewArgs),
-    Result =.. [Functor|NewArgs], !.
-substitute_term(_, _, Term, Term).
-*/
 % =========================================================================
-% END
+% END of Prover
 % =========================================================================

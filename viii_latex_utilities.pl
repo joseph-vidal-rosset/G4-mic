@@ -7,15 +7,6 @@
 % =========================================================================
 
 % render_hypo/7: Affiche une hypothese en Fitch style
-/*
-render_hypo(O, X, L, J, K, U, V) :-
-    render_lineno(J, K),
-    render_bars(O),
-    write('\\fh '),
-    rewrite(X, U, V, Y),
-    write_formula_with_parens(Y),
-    render_label(L).
-*/
 
 render_hypo(Scope, Formula, Label, _CurLine, _NextLine, VarIn, VarOut) :-
     render_fitch_indent(Scope),
@@ -36,15 +27,6 @@ render_fitch_indent(N) :-
     write('\\fa '),
     N1 is N - 1,
     render_fitch_indent(N1).
-
-/*
-render_have(O, X, L, J, K, U, V) :-
-    render_lineno(J, K),
-    render_bars(O),
-    rewrite(X, U, V, Y),
-    write_formula_with_parens(Y),
-    render_label(L).
-*/
 
 render_have(Scope, Formula, Just, _CurLine, _NextLine, VarIn, VarOut) :-
     render_fitch_indent(Scope),

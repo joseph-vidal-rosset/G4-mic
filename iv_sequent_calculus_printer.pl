@@ -212,35 +212,6 @@ render_bussproofs(lcond(Seq, P1, P2), VarCounter, FinalCounter) :-
     render_sequent(Seq, Temp2, FinalCounter),
     write('$}'), nl.
 
-/*
-% L<=> : Biconditionnelle a gauche (elimination)
-render_bussproofs(lbicond(Seq, P), VarCounter, FinalCounter) :-
-    !,
-    render_bussproofs(P, VarCounter, TempCounter),
-    write('\\RightLabel{\\scriptsize $L\\leftrightarrow$}'), nl,
-    write('\\UnaryInfC{$'),
-    render_sequent(Seq, TempCounter, FinalCounter),
-    write('$}'), nl.
-
-% R<=> : Biconditionnelle a droite (introduction - branchante)
-render_bussproofs(rbicond(Seq, P1, P2), VarCounter, FinalCounter) :-
-    !,
-    render_bussproofs(P1, VarCounter, Temp1),
-    render_bussproofs(P2, Temp1, Temp2),
-    write('\\RightLabel{\\scriptsize $R\\leftrightarrow$}'), nl,
-    write('\\BinaryInfC{$'),
-    render_sequent(Seq, Temp2, FinalCounter),
-    write('$}'), nl.
-
-% L<=> variante 3 : Substitution dans predicats
-render_bussproofs(lbicond_subst(Seq, P), VarCounter, FinalCounter) :-
-    !,
-    render_bussproofs(P, VarCounter, TempCounter),
-    write('\\RightLabel{\\scriptsize $L\\Leftrightarrow_{subst}$}'), nl,
-    write('\\UnaryInfC{$'),
-    render_sequent(Seq, TempCounter, FinalCounter),
-    write('$}'), nl.
-*/
 
 % CQ_c : Regle de conversion classique (?x:A => B) => ?x:(A => B)
 render_bussproofs(cq_c(Seq, P), VarCounter, FinalCounter) :-
@@ -430,18 +401,7 @@ filter_top_from_gamma([H|T], Filtered) :-
 is_top_formula((# => #)) :- !.
 is_top_formula(((# => #) => #) => #) :- !.  % Double negation de ?
 is_top_formula(_) :- fail.
-/*
-% Antisequent : ? ? ? (pour les echecs)
-render_antisequent(G > D, VarCounter, FinalCounter) :-
-    render_formula_list(G, VarCounter, TempCounter),
-    write(' \\nvdash '),
-    ( D = [] ->
-        write('\\bot'),
-        FinalCounter = TempCounter
-    ;
-        render_formula_list(D, TempCounter, FinalCounter)
-    ).
-*/
+
 % =========================================================================
 % RENDU DES LISTES DE FORMULES
 % =========================================================================

@@ -497,5 +497,5 @@ build_hypothesis_map([_|Rest], AccMap, FinalMap) :-
     build_hypothesis_map(Rest, AccMap, FinalMap).
 
 % =========================================================================
-% FIN
+% End of common ND PRINTING
 % =========================================================================
