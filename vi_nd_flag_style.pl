@@ -306,7 +306,13 @@ fitch_g4_proof(lor((Premisss > [Goal]), SP1, SP2), Context, Scope, CurLine, Next
        true
     ; 
       select((A | B), Premisss, _),
-      find_disj_context(A, B, Context, DisjLine),
+      % First try to find the disjunction in the context, otherwise in premises
+      ( find_disj_context(A, B, Context, DisjLine) ->
+          true
+      ;
+          % Disjunction is a premise, find its line
+          find_context_line((A | B), Context, DisjLine)
+      ),
       AssLineA is CurLine + 1,
       assert_safe_fitch_line(AssLineA, A, assumption, Scope),
       render_hypo(Scope, A, 'AS', CurLine, AssLineA, VarIn, V1),
