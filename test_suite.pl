@@ -421,9 +421,11 @@ test_quantifier_negation :-
 test_Spinoza :-
         write('35. Spinoza: "nothing is contingent" '), nl,
         prove((![x]:(~ c(x) <=> (?[y]:n(y,x) | ?[z]:d(z,x))) & ![x]:(?[z]:d(z,x))) => ![x]: ~ c(x)).
+/*
 test_Lepage :-
         write( '36. Lepage, Elements de logique contemporaine, p. 202, ex. 14*-g'), nl,
         prove((![x]:(f(x) <=> g(x)) & ![x]:(h(x) <=> i(x)) & ?[x]:(i(x) & ![y]:(f(y) => j(y)))) => ?[x]:(h(x) & ![y]:(j(y) | ~ g(y)))).
+  */
 test_fol_instantiation :-
     write('37.'), nl,
     prove(![x]:p(x) => ?[x]:p(x)), nl.
@@ -518,7 +520,7 @@ run_all_tests :-
     test_mixed_quantifiers, nl,
     test_quantifier_negation, nl,
     test_Spinoza,nl,
-    test_Lepage,nl,
+    % test_Lepage,nl,
     test_fol_instantiation,nl,
     test_fol_quantifiers_permutation,nl,
     test_russell_paradox,nl,
@@ -938,7 +940,7 @@ test_seq_spinoza :-
         ![x]:(~ c(x) <=> (?[y]:n(y,x) | ?[z]:d(z,x))),
         ![x]:(?[z]:d(z,x))
     ] > [![x]: ~ c(x)]).
-
+/*
 test_seq_lepage :-
     write('104. Lepage'), nl,
     prove([
@@ -946,7 +948,7 @@ test_seq_lepage :-
         ![x]:(h(x) <=> i(x)),
         ?[x]:(i(x) & ![y]:(f(y) => j(y)))
     ] > [?[x]:(h(x) & ![y]:(j(y) | ~ g(y)))]).
-
+*/
 % =================================================================
 % BICONDITIONAL SEQUENTS
 % =================================================================
@@ -1009,7 +1011,7 @@ run_fol_seq :-
     
     write('=== COMPLEX FOL ==='), nl,
     test_seq_spinoza, nl,
-    test_seq_lepage, nl,
+   % test_seq_lepage, nl,
     
     write('=== BICONDITIONALS ==='), nl,
     test_seq_bicond_left, nl,

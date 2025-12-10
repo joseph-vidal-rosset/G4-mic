@@ -77,16 +77,22 @@ prove(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, lor(Gam
     select((A|B),Gamma,G1), !,
     prove([A|G1]>Delta, FreeVars, Threshold, SkolemIn, J1, LogicLevel, P1),
     prove([B|G1]>Delta, FreeVars, Threshold, J1, SkolemOut, LogicLevel, P2).
-% 13. R-forall 
+% 13. R-forall - with global eigenvariable registry
 prove(Gamma > Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, rall(Gamma>Delta, P)) :-
     select((![_Z-X]:A), Delta, D1), !,
     copy_term((X:A,FreeVars), (f_sk(SkolemIn,FreeVars):A1,FreeVars)),
+    % CHECK: f_sk must not be identical to any previously used eigenvariable
+    (nb_current(g4_eigenvars, UsedVars) -> true ; UsedVars = []),
+    \+ member_check(f_sk(SkolemIn,FreeVars), UsedVars),
+    % Register this eigenvariable
+    nb_setval(g4_eigenvars, [f_sk(SkolemIn,FreeVars)|UsedVars]),
     J1 is SkolemIn+1,
     prove(Gamma > [A1|D1], FreeVars, Threshold, J1, SkolemOut, LogicLevel, P).
-% 14. L-forall 
+% 14. L-forall - WITH OTTEN's LIMITATION
 prove(Gamma > Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, lall(Gamma>Delta, P)) :-
     member((![_Z-X]:A), Gamma),
-    length(FreeVars, Len), Len < Threshold,  
+    % OTTEN's CHECK: prevent infinite instantiation when threshold is reached
+    \+ length(FreeVars, Threshold),
     copy_term((X:A,FreeVars), (Y:A1,FreeVars)),
     prove([A1|Gamma] > Delta, [Y|FreeVars], Threshold, SkolemIn, SkolemOut, LogicLevel, P), !.
 % 8. R-> 
@@ -116,10 +122,17 @@ prove(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, rand(Ga
     Delta = [(A&B)], !,
     prove(Gamma>[A], FreeVars, Threshold, SkolemIn, J1, LogicLevel, P1),
     prove(Gamma>[B], FreeVars, Threshold, J1, SkolemOut, LogicLevel, P2).
- % 12. L-exists 
+ % 12. L-exists - with global eigenvariable registry
 prove(Gamma > Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, lex(Gamma>Delta, P)) :-
     select((?[_Z-X]:A), Gamma, G1), !,
+    % Auto-initialize on first call
+    (SkolemIn =:= 1, \+ nb_current(g4_eigenvars, _) -> init_eigenvars ; true),
     copy_term((X:A,FreeVars), (f_sk(SkolemIn,FreeVars):A1,FreeVars)),
+    % CHECK: f_sk must not be identical to any previously used eigenvariable
+    (nb_current(g4_eigenvars, UsedVars) -> true ; UsedVars = []),
+    \+ member_check(f_sk(SkolemIn,FreeVars), UsedVars),
+    % Register this eigenvariable
+    nb_setval(g4_eigenvars, [f_sk(SkolemIn,FreeVars)|UsedVars]),
     J1 is SkolemIn+1,
     prove([A1|G1] > Delta, FreeVars, Threshold, J1, SkolemOut, LogicLevel, P).
 % 15. R-exists 
@@ -269,6 +282,18 @@ is_nested_negation(Target, Target, 0) :- !.
 is_nested_negation((Inner => #), Target, N) :-
     is_nested_negation(Inner, Target, N1),
     N is N1 + 1.
+
+% =========================================================================
+% EIGENVARIABLE REGISTRY (using nb_setval)
+% =========================================================================
+% Initialize eigenvariable registry (call before each proof attempt)
+init_eigenvars :- nb_setval(g4_eigenvars, []).
+
+% member_check(Term, List): check if Term is structurally equivalent (=@=) to any member
+member_check(Term, List) :-
+    member(Elem, List),
+    Term =@= Elem,
+    !.
 
 % =========================================================================
 % END of Prover

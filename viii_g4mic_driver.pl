@@ -282,11 +282,11 @@ prove(Left <=> Right) :- !,
     
     nl,
     write('=== BICONDITIONAL: Proving both directions ==='), nl,nl,
-    % output_logic_label(Logic1), nl, nl,
-  %  write('    '), portray_clause(Proof1), nl,nl,
-   %  output_logic_label(Logic2), nl, nl,
-  % write('    '), portray_clause(Proof2), nl,nl,
-  % write('Q.E.D.'), nl, nl,
+    output_logic_label(Logic1), nl, nl,
+    write('    '), portray_clause(Proof1), nl,nl,
+    output_logic_label(Logic2), nl, nl,
+    write('    '), portray_clause(Proof2), nl,nl,
+    write('Q.E.D.'), nl, nl,
     
     % SEQUENT CALCULUS - BOTH DIRECTIONS
     write('- Sequent Calculus -'), nl, nl,
@@ -339,10 +339,10 @@ prove([Left] <> [Right]) :- !,
     nl,
     write('=== SEQUENT EQUIVALENCE: Proving both directions ==='), nl,
     output_logic_label(Logic1), nl, nl,
-  %  write('    '), portray_clause(Proof1), nl, nl,
+    write('    '), portray_clause(Proof1), nl, nl,
     output_logic_label(Logic2), nl, nl,
-  %  write('    '), portray_clause(Proof2), nl, nl,
-  %  write('Q.E.D.'), nl, nl,
+    write('    '), portray_clause(Proof2), nl, nl,
+     write('Q.E.D.'), nl, nl,
     
     % SEQUENT CALCULUS - BOTH DIRECTIONS
     write('- Sequent Calculus -'), nl, nl,
@@ -521,6 +521,9 @@ output_proof_results(Proof, LogicType, OriginalFormula, Mode) :-
     retractall(current_logic_level(_)),
     assertz(current_logic_level(LogicType)),
     output_logic_label(LogicType),
+    % ADDED: Display raw Prolog proof term
+    nl, write('=== RAW PROLOG PROOF TERM ==='), nl,
+    write('    '), portray_clause(Proof), nl, nl,
     ( catch(
           (copy_term(Proof, ProofCopy),
            numbervars(ProofCopy, 0, _),
@@ -580,8 +583,9 @@ provable_at_level(Sequent, constructive, P) :-
     logic_iteration_limit(constructive, MaxIter),
     for(Threshold, 0, MaxIter),
     Sequent = (Gamma > Delta),
+    init_eigenvars,  % Initialize before each attempt
     ( prove(Gamma > Delta, [], Threshold, 1, _, minimal, P) -> true    % <- Essayer minimal d'abord
-    ; prove(Gamma > Delta, [], Threshold, 1, _, intuitionistic, P)     % <- Then intuitionistic if failure
+    ; init_eigenvars, prove(Gamma > Delta, [], Threshold, 1, _, intuitionistic, P)     % <- Then intuitionistic if failure
     ),
     !.
 
@@ -589,6 +593,7 @@ provable_at_level(Sequent, LogicLevel, Proof) :-
     logic_iteration_limit(LogicLevel, MaxIter),
     for(Threshold, 0, MaxIter),
     Sequent = (Gamma > Delta),
+    init_eigenvars,  % Initialize before each attempt
     prove(Gamma > Delta, [], Threshold, 1, _, LogicLevel, Proof),
     !.
 
@@ -749,9 +754,6 @@ examples :-
     write('  % Drinker Paradox (classical)'), nl,
     write('  ?- prove(?[y]:(d(y) => ![x]:d(x))).'), nl,
     nl.
-% =========================================================================
-% END OF DRIVER
-% =========================================================================
 % =========================================================================
 % TRADUCTION DU BICONDITIONNELLE INTERNE
 % A <=> B devient (A => B) & (B => A)
