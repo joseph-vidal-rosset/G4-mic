@@ -4,6 +4,19 @@
 % =========================================================================
 
 % =========================================================================
+% ANTISEQUENT RULE (Asq) - exactly like Ax but in red with \nvdash
+% =========================================================================
+
+% Antisequent: counter-model (exactly like axiom)
+render_bussproofs(asq(Seq, _), VarCounter, FinalCounter) :-
+    !,
+    write('\\AxiomC{}'), nl,
+    write('\\RightLabel{\\scriptsize{$\\color{red}{Asq.}$}}'), nl,
+    write('\\UnaryInfC{$\\color{red}{'),
+    render_antisequent(Seq, VarCounter, FinalCounter),
+    write('}$}'), nl.
+
+% =========================================================================
 % G4 rules 
 % =========================================================================
 
@@ -299,6 +312,24 @@ render_sequent(Gamma > Delta, VarCounter, FinalCounter) :-
         % Sequent with premisses
         render_formula_list(FilteredGamma, VarCounter, TempCounter),
         write(' \\vdash ')
+    ),
+    ( Delta = [] ->
+        write('\\bot'),
+        FinalCounter = TempCounter
+    ;
+        render_formula_list(Delta, TempCounter, FinalCounter)
+    ).
+
+% Render antisequent with \nvdash (for refutations)
+render_antisequent(Gamma < Delta, VarCounter, FinalCounter) :-
+    filter_top_from_gamma(Gamma, FilteredGamma),
+    
+    ( FilteredGamma = [] ->
+        write(' \\nvdash '),
+        TempCounter = VarCounter
+    ;
+        render_formula_list(FilteredGamma, VarCounter, TempCounter),
+        write(' \\nvdash ')
     ),
     ( Delta = [] ->
         write('\\bot'),

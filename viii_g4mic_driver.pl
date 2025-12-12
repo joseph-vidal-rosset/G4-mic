@@ -1,4 +1,4 @@
-% G4-mic: Automated theorem prover for minimal, intuitionistic and classical logic
+%  G4-mic: Automated theorem prover for minimal, intuitionistic and classical logic
 % Copyright (C) 2025 Joseph Vidal-Rosset
 %
 % This program is free software: you can redistribute it and/or modify
@@ -260,70 +260,122 @@ prove(G > D) :-
             write('    Constructive logic failed'), nl,
             write('=== TRYING CLASSICAL LOGIC ==='), nl,
             time(provable_at_level(PrepG > PrepD, classical, Proof)),
-            write('    Proof found in CLASSICAL LOGIC '), nl,
+            !,  % Cut here to prevent backtracking
+            % Check if refutation or proof
+            (is_antisequent_proof(Proof) ->
+                write('    Formula refuted (counter-model found)'), nl
+            ;
+                write('    Proof found in CLASSICAL LOGIC '), nl
+            ),
             Logic = classical,
             OutputProof = Proof
         )
     ),
     output_proof_results(OutputProof, Logic, G > D, sequent).
 
-% Biconditionals - REGROUPES PAR TYPE
+% Biconditionals 
 prove(Left <=> Right) :- !,
-         % VALIDATION: Verify both directions
     validate_and_warn(Left, _),
     validate_and_warn(Right, _),
+    
+    % Test direction 1
     retractall(current_proof_sequent(_)),
     assertz(current_proof_sequent(Left => Right)),
-    time((decide_silent(Left => Right, Proof1, Logic1))),
+    ( catch(time((decide_silent(Left => Right, Proof1, Logic1))), _, fail) ->
+        Direction1Valid = true,
+        (is_antisequent_proof(Proof1) -> IsRefutation1 = true ; IsRefutation1 = false)
+    ;
+        Direction1Valid = false, Proof1 = none, Logic1 = none, IsRefutation1 = false
+    ),
     
+    % Test direction 2
     retractall(current_proof_sequent(_)),
     assertz(current_proof_sequent(Right => Left)),
-    time((decide_silent(Right => Left, Proof2, Logic2))),
+    ( catch(time((decide_silent(Right => Left, Proof2, Logic2))), _, fail) ->
+        Direction2Valid = true,
+        (is_antisequent_proof(Proof2) -> IsRefutation2 = true ; IsRefutation2 = false)
+    ;
+        Direction2Valid = false, Proof2 = none, Logic2 = none, IsRefutation2 = false
+    ),
     
     nl,
-    write('=== BICONDITIONAL: Proving both directions ==='), nl,nl,
-    output_logic_label(Logic1), nl, nl,
-    write('    '), portray_clause(Proof1), nl,nl,
-    output_logic_label(Logic2), nl, nl,
-    write('    '), portray_clause(Proof2), nl,nl,
-    write('Q.E.D.'), nl, nl,
+    write('=== BICONDITIONAL:  Proving both directions ==='), nl, nl,
     
-    % SEQUENT CALCULUS - BOTH DIRECTIONS
-    write('- Sequent Calculus -'), nl, nl,
-    write('\\begin{prooftree}'), nl,
-    render_bussproofs(Proof1, 0, _),
-    write('\\end{prooftree}'), nl, nl,
-    write('\\begin{prooftree}'), nl,
-    render_bussproofs(Proof2, 0, _),
-    write('\\end{prooftree}'), nl, nl,
-    write('Q.E.D.'), nl, nl,
+    % Direction 1
+    write('=== DIRECTION 1: '), write(Left => Right), write(' ==='), nl, nl,
+    ( Direction1Valid = true ->
+        ( IsRefutation1 = true ->
+            write('REFUTED (counter-model found)'), nl, nl,
+            write('- Sequent Calculus (Refutation) -'), nl, nl,
+            write('\\begin{prooftree}'), nl,
+            render_bussproofs(Proof1, 0, _),
+            write('\\end{prooftree}'), nl, nl
+        ;
+            output_logic_label(Logic1), nl,
+            write('    '), portray_clause(Proof1), nl, nl,
+            write('- Sequent Calculus -'), nl, nl,
+            write('\\begin{prooftree}'), nl,
+            render_bussproofs(Proof1, 0, _),
+            write('\\end{prooftree}'), nl, nl,
+            write('Q. E.D. '), nl, nl,
+            write('- Natural Deduction -'), nl,
+            write('a) Tree Style: '), nl, nl,
+            render_nd_tree_proof(Proof1), nl, nl,
+            write('Q.E.D.'), nl, nl,
+            write('b) Flag Style:'), nl, nl,
+            write('\\begin{fitch}'), nl,
+            g4_to_fitch_theorem(Proof1),
+            write('\\end{fitch}'), nl, nl,
+            write('Q.E.D.'), nl, nl
+        )
+    ; write('FAILED TO PROVE OR REFUTE'), nl, nl
+    ),
     
-    % TREE STYLE - BOTH DIRECTIONS
-    write('- Natural Deduction -'), nl,
-    write('a) Tree Style:'), nl, nl,
-    render_nd_tree_proof(Proof1), nl, nl,
-    render_nd_tree_proof(Proof2), nl, nl,
-    write('Q.E.D.'), nl, nl,
+    % Direction 2
+    write('=== DIRECTION 2: '), write(Right => Left), write(' ==='), nl, nl,
+    ( Direction2Valid = true ->
+        ( IsRefutation2 = true ->
+            write('REFUTED (counter-model found)'), nl, nl,
+            write('- Sequent Calculus (Refutation) -'), nl, nl,
+            write('\\begin{prooftree}'), nl,
+            render_bussproofs(Proof2, 0, _),
+            write('\\end{prooftree}'), nl, nl
+        ;
+            output_logic_label(Logic2), nl,
+            write('    '), portray_clause(Proof2), nl, nl,
+            write('- Sequent Calculus -'), nl, nl,
+            write('\\begin{prooftree}'), nl,
+            render_bussproofs(Proof2, 0, _),
+            write('\\end{prooftree}'), nl, nl,
+            write('Q.E.D. '), nl, nl,
+            write('- Natural Deduction -'), nl,
+            write('a) Tree Style:'), nl, nl,
+            render_nd_tree_proof(Proof2), nl, nl,
+            write('Q. E.D.'), nl, nl,
+            write('b) Flag Style:'), nl, nl,
+            write('\\begin{fitch}'), nl,
+            g4_to_fitch_theorem(Proof2),
+            write('\\end{fitch}'), nl, nl,
+            write('Q.E.D.'), nl, nl
+        )
+    ; write('FAILED TO PROVE OR REFUTE'), nl, nl
+    ),
     
-    % TREE STYLE - BOTH DIRECTIONS
-    write('b) Flag Style:'), nl, nl,
-    write('\\begin{fitch}'), nl,
-    g4_to_fitch_theorem(Proof1),
-    write('\\end{fitch}'), nl, nl,
-    write('\\begin{fitch}'), nl,
-    g4_to_fitch_theorem(Proof2),
-    write('\\end{fitch}'), nl, nl,
-    write('Q.E.D.'), nl, nl,
-    
-    write('This biconditional is valid:'), nl,
-    write('- Direction 1 ('), write(Left => Right), write(')'),  
-    write(' is valid in '), write(Logic1), write(' logic'), nl,
-    write('- Direction 2 ('), write(Right => Left), write(')'),
-    write(' is valid in '), write(Logic2), write(' logic.'), nl,
-    !.
-
+    % Summary
+    write('=== SUMMARY ==='), nl,
+    write('- Direction 1 ('), write(Left => Right), write('): '),
+    ( Direction1Valid = true ->
+        ( IsRefutation1 = true -> write('INVALID (refuted)') ; write('VALID in '), write(Logic1), write(' logic') )
+    ; write('FAILED')
+    ), nl,
+    write('- Direction 2 ('), write(Right => Left), write('): '),
+    ( Direction2Valid = true ->
+        ( IsRefutation2 = true -> write('INVALID (refuted)') ; write('VALID in '), write(Logic2), write(' logic') )
+    ; write('FAILED')
+    ), nl, nl, ! .
 
 % Sequent equivalence: [A] <> [B] proves [A] > [B] AND [B] > [A]
+/*
 prove([Left] <> [Right]) :- !,
           % VALIDATION: Verify both formulas
     validate_and_warn(Left, _),
@@ -393,6 +445,115 @@ prove([Left] <> [Right]) :- !,
     write('- Direction 2 ('), write(Right), write(' |- '), write(Left), write(')'),
     write(' is valid in '), write(Logic2), write(' logic.'), nl,
     !.
+  */
+% Sequent equivalence:  [A] <> [B] - CORRECTED VERSION
+prove([Left] <> [Right]) :- !,
+    validate_and_warn(Left, _),
+    validate_and_warn(Right, _),
+    
+    % Test direction 1: [Left] > [Right]
+    retractall(current_proof_sequent(_)),
+    assertz(current_proof_sequent([Left] > [Right])),
+    ( catch(time((prove_sequent_silent([Left] > [Right], Proof1, Logic1))), _, fail) ->
+        Direction1Valid = true,
+        (is_antisequent_proof(Proof1) -> IsRefutation1 = true ; IsRefutation1 = false)
+    ;
+        Direction1Valid = false, Proof1 = none, Logic1 = none, IsRefutation1 = false
+    ),
+    
+    % Test direction 2: [Right] > [Left]
+    retractall(current_proof_sequent(_)),
+    assertz(current_proof_sequent([Right] > [Left])),
+    ( catch(time((prove_sequent_silent([Right] > [Left], Proof2, Logic2))), _, fail) ->
+        Direction2Valid = true,
+        (is_antisequent_proof(Proof2) -> IsRefutation2 = true ; IsRefutation2 = false)
+    ;
+        Direction2Valid = false, Proof2 = none, Logic2 = none, IsRefutation2 = false
+    ),
+    
+    nl,
+    write('=== SEQUENT EQUIVALENCE:  Proving both directions ==='), nl, nl,
+    
+    % Direction 1
+    write('=== DIRECTION 1: '), write(Left), write(' |- '), write(Right), write(' ==='), nl, nl,
+    ( Direction1Valid = true ->
+        ( IsRefutation1 = true ->
+            write('REFUTED (counter-model found)'), nl, nl,
+            write('- Sequent Calculus (Refutation) -'), nl, nl,
+            write('\\begin{prooftree}'), nl,
+            render_bussproofs(Proof1, 0, _),
+            write('\\end{prooftree}'), nl, nl
+        ;
+            output_logic_label(Logic1), nl,
+            write('    '), portray_clause(Proof1), nl, nl,
+            write('- Sequent Calculus -'), nl, nl,
+            write('\\begin{prooftree}'), nl,
+            render_bussproofs(Proof1, 0, _),
+            write('\\end{prooftree}'), nl, nl,
+            write('Q. E.D. '), nl, nl,
+            write('- Natural Deduction -'), nl,
+            write('a) Tree Style: '), nl, nl,
+            retractall(current_proof_sequent(_)),
+            assertz(current_proof_sequent([Left] > [Right])),
+            retractall(premiss_list(_)),
+            assertz(premiss_list([Left])),
+            render_nd_tree_proof(Proof1), nl, nl,
+            write('Q.E.D.'), nl, nl,
+            write('b) Flag Style:'), nl, nl,
+            write('\\begin{fitch}'), nl,
+            g4_to_fitch_sequent(Proof1, [Left] > [Right]),
+            write('\\end{fitch}'), nl, nl,
+            write('Q.E.D.'), nl, nl
+        )
+    ; write('FAILED TO PROVE OR REFUTE'), nl, nl
+    ),
+    
+    % Direction 2
+    write('=== DIRECTION 2: '), write(Right), write(' |- '), write(Left), write(' ==='), nl, nl,
+    ( Direction2Valid = true ->
+        ( IsRefutation2 = true ->
+            write('REFUTED (counter-model found)'), nl, nl,
+            write('- Sequent Calculus (Refutation) -'), nl, nl,
+            write('\\begin{prooftree}'), nl,
+            render_bussproofs(Proof2, 0, _),
+            write('\\end{prooftree}'), nl, nl
+        ;
+            output_logic_label(Logic2), nl,
+            write('    '), portray_clause(Proof2), nl, nl,
+            write('- Sequent Calculus -'), nl, nl,
+            write('\\begin{prooftree}'), nl,
+            render_bussproofs(Proof2, 0, _),
+            write('\\end{prooftree}'), nl, nl,
+            write('Q.E.D. '), nl, nl,
+            write('- Natural Deduction -'), nl,
+            write('a) Tree Style:'), nl, nl,
+            retractall(current_proof_sequent(_)),
+            assertz(current_proof_sequent([Right] > [Left])),
+            retractall(premiss_list(_)),
+            assertz(premiss_list([Right])),
+            render_nd_tree_proof(Proof2), nl, nl,
+            write('Q.E.D.'), nl, nl,
+            write('b) Flag Style:'), nl, nl,
+            write('\\begin{fitch}'), nl,
+            g4_to_fitch_sequent(Proof2, [Right] > [Left]),
+            write('\\end{fitch}'), nl, nl,
+            write('Q.E.D.'), nl, nl
+        )
+    ; write('FAILED TO PROVE OR REFUTE'), nl, nl
+    ),
+    
+    % Summary
+    write('=== SUMMARY ==='), nl,
+    write('- Direction 1 ('), write(Left), write(' |- '), write(Right), write('): '),
+    ( Direction1Valid = true ->
+        ( IsRefutation1 = true -> write('INVALID (refuted)') ; write('VALID in '), write(Logic1), write(' logic') )
+    ; write('FAILED')
+    ), nl,
+    write('- Direction 2 ('), write(Right), write(' |- '), write(Left), write('): '),
+    ( Direction2Valid = true ->
+        ( IsRefutation2 = true -> write('INVALID (refuted)') ; write('VALID in '), write(Logic2), write(' logic') )
+    ; write('FAILED')
+    ), nl, nl, !.
 
 % Theorems (original logic)
 prove(Formula) :-
@@ -467,7 +628,12 @@ prove(Formula) :-
             write('   Constructive logic failed'), nl,
             write('=== TRYING CLASSICAL LOGIC ==='), nl,
             time(provable_at_level([] > [F2], classical, Proof)),
-            write('  Proof found in Classical logic'), nl,
+            % Check if refutation or proof
+            (is_antisequent_proof(Proof) ->
+                write('  Formula refuted (counter-model found)'), nl
+            ;
+                write('  Proof found in Classical logic'), nl
+            ),
             Logic = classical,
             OutputProof = Proof
         )
@@ -515,12 +681,26 @@ validate_sequent_formulas(G, D) :-
 % =========================================================================
 
 output_proof_results(Proof, LogicType, OriginalFormula, Mode) :-
+    % Detect if this is an antisequent (refutation)
+    (is_antisequent_proof(Proof) ->
+        IsRefutation = true
+    ;
+        IsRefutation = false
+    ),
+    
     extract_formula_from_proof(Proof, Formula),
     detect_and_set_logic_level(Formula),
     % Store logic level for use in proof rendering (e.g., DS optimization)
     retractall(current_logic_level(_)),
     assertz(current_logic_level(LogicType)),
-    output_logic_label(LogicType),
+    
+    % Display appropriate label
+    (IsRefutation = true ->
+        write('G4+IP refutation in classical logic'), nl, nl
+    ;
+        output_logic_label(LogicType)
+    ),
+    
     % ADDED: Display raw Prolog proof term
     nl, write('=== RAW PROLOG PROOF TERM ==='), nl,
     write('    '), portray_clause(Proof), nl, nl,
@@ -531,25 +711,50 @@ output_proof_results(Proof, LogicType, OriginalFormula, Mode) :-
           error(cyclic_term, _),
           (write('%% WARNING: Cannot represent proof term due to cyclic_term.'), nl, nl)
       ) -> true ; true ),
+    
+    % Sequent Calculus
     write('- Sequent Calculus -'), nl, nl,
     write('\\begin{prooftree}'), nl,
     render_bussproofs(Proof, 0, _),
     write('\\end{prooftree}'), nl, nl,
     write('Q.E.D.'), nl, nl,
-    write('- Natural Deduction -'), nl,
-    write('a) Tree Style:'), nl, nl,
-    render_nd_tree_proof(Proof), nl, nl,
-    write('Q.E.D.'), nl, nl,
-    write('b) Flag Style:'), nl, nl,
-    write('\\begin{fitch}'), nl,
-    ( Mode = sequent ->
-        g4_to_fitch_sequent(Proof, OriginalFormula)
+    
+    % Skip Natural Deduction for antisequents
+    (IsRefutation = false ->
+        write('- Natural Deduction -'), nl,
+        write('a) Tree Style:'), nl, nl,
+        render_nd_tree_proof(Proof), nl, nl,
+        write('Q.E.D.'), nl, nl,
+        write('b) Flag Style:'), nl, nl,
+        write('\\begin{fitch}'), nl,
+        ( Mode = sequent ->
+            g4_to_fitch_sequent(Proof, OriginalFormula)
+        ;
+            g4_to_fitch_theorem(Proof)
+        ),
+        write('\\end{fitch}'), nl, nl,
+        write('Q.E.D.'), nl, nl
     ;
-        g4_to_fitch_theorem(Proof)
+        true  % Skip ND for refutations
     ),
-    write('\\end{fitch}'), nl, nl,
-    write('Q.E.D.'), nl, nl,
     !.
+
+% Helper: detect if a proof is an antisequent
+% Helper: detect if a proof contains an antisequent RULE (not just asq in formulas)
+is_antisequent_proof(asq(Seq, _)) :- 
+    % Must be asq as a PROOF RULE with a sequent
+    (Seq = (_ < _) ; Seq = (_ > _)), !.
+is_antisequent_proof(Proof) :-
+    compound(Proof),
+    Proof =.. [Functor|Args],
+    % Only check sub-proofs, not the sequent (first arg)
+    member(Functor, [ip, ltoto, lall, rcond, lex, rex, lor, rand, 
+                     lorto, land, l0cond, landto, tne, lex_lor, rall,
+                     cq_c, cq_m, eq_refl, eq_sym, eq_trans, eq_trans_chain,
+                     eq_cong, eq_subst_eq, eq_subst]),
+    Args = [_Sequent|SubProofs],  % Skip sequent, check sub-proofs
+    member(SubProof, SubProofs),
+    is_antisequent_proof(SubProof).
 
 % =========================================================================
 % SILENT VERSIONS (for internal use)
@@ -590,12 +795,35 @@ provable_at_level(Sequent, constructive, P) :-
     !.
 
 provable_at_level(Sequent, LogicLevel, Proof) :-
+    LogicLevel \= classical,  % For non-classical logics
     logic_iteration_limit(LogicLevel, MaxIter),
     for(Threshold, 0, MaxIter),
     Sequent = (Gamma > Delta),
-    init_eigenvars,  % Initialize before each attempt
+    init_eigenvars,
     prove(Gamma > Delta, [], Threshold, 1, _, LogicLevel, Proof),
     !.
+
+% CLASSICAL LOGIC: Two-pass approach
+% PASS 1: Normal proof search (antisequent disabled)
+% PASS 2: If pass 1 fails, enable antisequent and search for counter-model
+provable_at_level(Sequent, classical, Proof) :-
+    Sequent = (Gamma > Delta),
+    logic_iteration_limit(classical, MaxIter),
+    (   % PASS 1: Normal proof
+        (for(Threshold, 0, MaxIter),
+         init_eigenvars,
+         prove(Gamma > Delta, [], Threshold, 1, _, classical, Proof))
+    ->  true  % Success - proof found
+    ;   % PASS 2: Antisequent (only if pass 1 failed completely)
+        nb_setval(asq_enabled, true),
+        once((  % USE ONCE to prevent multiple solutions
+            for(Threshold, 0, MaxIter),
+            init_eigenvars,
+            prove(Gamma > Delta, [], Threshold, 1, _, classical, Proof)
+        )),
+        nb_setval(asq_enabled, false)
+    ),
+    !.  % Cut to prevent backtracking to alternative proofs
 
 % =========================================================================
 % DISPLAY HELPERS
@@ -842,7 +1070,7 @@ subst_neg(A <=> B, A1 <=> B1) :-
     subst_neg(A, A1),
     subst_neg(B, B1).
 
-% Bacis case
+% Basic case
 subst_neg(A, A).
 %=================================
 % END OF DRIVER

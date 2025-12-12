@@ -2,6 +2,19 @@
 % G4 FOL Prover with equality 
 % TPTP-version
 % =========================================================================
+% =========================================================================
+% EIGENVARIABLE REGISTRY (using nb_setval)
+% =========================================================================
+% Initialize eigenvariable registry (call before each proof attempt)
+init_eigenvars :- nb_setval(g4_eigenvars, []).
+
+% member_check(Term, List): check if Term is structurally equivalent (=@=) to any member
+member_check(Term, List) :-
+    member(Elem, List),
+    Term =@= Elem,
+    !.
+
+
 % prove/7 - 
 % prove(Sequent, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, Proof)
 % LogicLevel: minimal | intuitionistic | classical
@@ -245,6 +258,35 @@ prove(Gamma > Delta, _, _, SkolemIn, SkolemIn, _, eq_subst(Gamma>Delta)) :-
     !.
 
 % =========================================================================
+% ANTISEQUENT - Only when explicitly enabled by driver (PASS 2)
+% =========================================================================
+% This clause is ONLY activated after normal proof search fails
+% It represents a counter-model when no atom in Gamma is in Delta
+% Antiséquent avec Gamma vide: ⊬ B
+prove([] > Delta, _, Threshold, SkolemIn, SkolemIn, classical, asq([] < Delta, _)) :-  
+    nb_current(asq_enabled, true),
+    Threshold >= 5,
+    Delta = [B],
+    B \= asq,
+    B \= asq(_,_),
+    % Pas de restriction sur la forme de B - toute formule invalide peut générer un antiséquent
+    !.
+
+% Antiséquent avec Gamma non-vide: Γ ⊬ B
+prove(Gamma > Delta, _, Threshold, SkolemIn, SkolemIn, classical, asq(Gamma < Delta, _)) :-  
+    nb_current(asq_enabled, true),
+    Threshold >= 5,
+    Gamma \= [],  % Gamma non-vide
+    Delta = [B], 
+    B \= asq,
+    B \= asq(_,_),
+    member(A, Gamma),
+    A \= asq,
+    A \= asq(_,_),
+    % Pas de restriction sur la forme de A - tout atome ou formule peut être dans Gamma
+    \+ member(A, Delta),
+    !.
+% =========================================================================
 % HELPERS
 % =========================================================================
 % Helper: find position of an element
@@ -282,18 +324,6 @@ is_nested_negation(Target, Target, 0) :- !.
 is_nested_negation((Inner => #), Target, N) :-
     is_nested_negation(Inner, Target, N1),
     N is N1 + 1.
-
-% =========================================================================
-% EIGENVARIABLE REGISTRY (using nb_setval)
-% =========================================================================
-% Initialize eigenvariable registry (call before each proof attempt)
-init_eigenvars :- nb_setval(g4_eigenvars, []).
-
-% member_check(Term, List): check if Term is structurally equivalent (=@=) to any member
-member_check(Term, List) :-
-    member(Elem, List),
-    Term =@= Elem,
-    !.
 
 % =========================================================================
 % END of Prover

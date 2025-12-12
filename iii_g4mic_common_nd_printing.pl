@@ -117,22 +117,17 @@ extract_new_formula(CurrentPremisses, SubProof, _) :-
 % FIXED: Search in entire context, prefer most recent (highest line number)
 % This ensures derived formulas are used instead of premisses when both exist
 find_context_line(Formula, Context, LineNumber) :-
-    findall(
-        Line:CtxFormula,
-        (
-            member(Line:CtxFormula, Context),
-            (   CtxFormula = Formula
-            ;   strip_annotations_match(Formula, CtxFormula)
-            ;   formulas_equivalent(Formula, CtxFormula)
-            )
-        ),
-        Matches
+    premiss_list(PremList),
+    length(PremList, NumPremises),
+    % Chercher UNIQUEMENT dans les N premières lignes
+    member(LineNumber:ContextFormula, Context),
+    LineNumber =< NumPremises,
+    % Matcher avec les différentes variantes possibles
+    ( ContextFormula = Formula
+    ; strip_annotations_match(Formula, ContextFormula)
+    ; formulas_equivalent(Formula, ContextFormula)
     ),
-    Matches \= [],
-    % Take the match with highest line number (most recent)
-    findall(Line, member(Line:_, Matches), LineNumbers),
-    max_list(LineNumbers, LineNumber),
-    !.
+    !.  % Couper dès qu'on trouve dans les prémisses
 
 % =========================================================================
 % PRIORITY -1: QUANTIFIER NEGATION (original ~ form)

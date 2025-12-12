@@ -366,6 +366,18 @@ rewrite((~A), J, K, (' \\lnot ' C)) :-
     rewrite(A, J, K, C).
 
 
+% QUANTIFIERS WITH ASQ ANNOTATIONS: strip asq(...) and use variable name
+% CRITICAL: Replace only the SPECIFIC asq term, not all asq terms
+rewrite((![X-asq(A,B)]:Body), J, K, (' \\forall ' X ' ' C)) :-
+    !,
+    replace_specific_asq(asq(A,B), X, Body, CleanBody),
+    rewrite(CleanBody, J, K, C).
+
+rewrite((?[X-asq(A,B)]:Body), J, K, (' \\exists ' X ' ' C)) :-
+    !,
+    replace_specific_asq(asq(A,B), X, Body, CleanBody),
+    rewrite(CleanBody, J, K, C).
+
 % QUANTIFICATEURS : Version Burse pour format X-Y
 rewrite((![X-X]:A), J, K, (' \\forall ' X ' ' C)) :-
     !,
@@ -449,9 +461,38 @@ concatenate_all(_, _) :-
 
 concatenate_all_impl([X], X) :-
     atomic(X), !.
+concatenate_all_impl([X], Result) :-
+    % Handle compound terms: flatten them
+    compound(X),
+    !,
+    flatten_term(X, Flattened),
+    concatenate_all_impl(Flattened, Result).
 concatenate_all_impl([H|T], Result) :-
+    atomic(H),
+    !,
     concatenate_all_impl(T, TempResult),
     atom_concat(H, TempResult, Result).
+concatenate_all_impl([H|T], Result) :-
+    % Handle compound terms in list
+    compound(H),
+    !,
+    flatten_term(H, Flattened),
+    append(Flattened, T, NewList),
+    concatenate_all_impl(NewList, Result).
+
+% Helper: flatten a compound term into a list of atoms
+flatten_term(Term, [Atom]) :-
+    atomic(Term),
+    !,
+    term_to_atom(Term, Atom).
+flatten_term(Term, Flattened) :-
+    compound(Term),
+    Term =.. [Functor|Args],
+    atom(Functor),
+    maplist(flatten_term, Args, ArgLists),
+    append(ArgLists, Flattened).
+flatten_term(Var, ['_']) :-
+    var(Var).
 
 % =========================================================================
 % LIST AND TERM PROCESSING
@@ -670,6 +711,29 @@ render_latex_formula(Formula) :-
 
 render_latex_with_parens(Formula, Context) :-
     write_with_context(Formula, Context).
+
+% =========================================================================
+% ASQ REPLACEMENT HELPER
+% =========================================================================
+% Replace SPECIFIC asq(A,B) term (not all asq terms) with variable X in formulas
+% Used when rendering quantifiers with asq annotations
+
+% Match the EXACT asq term (using unification with ==)
+replace_specific_asq(AsqTerm, Var, Term, Var) :-
+    Term == AsqTerm, !.
+
+% For compound terms, recurse but skip quantifier structures
+replace_specific_asq(AsqTerm, Var, Term, Result) :-
+    compound(Term),
+    Term \= ![_|_],
+    Term \= ?[_|_],
+    !,
+    Term =.. [F|Args],
+    maplist(replace_specific_asq(AsqTerm, Var), Args, NewArgs),
+    Result =.. [F|NewArgs].
+
+% Atoms and variables pass through
+replace_specific_asq(_, _, Term, Term).
 
 % =========================================================================
 % END OF LATEX UTILITIES FILE

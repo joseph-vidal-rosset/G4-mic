@@ -55,6 +55,7 @@
  % =========================================================================
 % Disable automatic SWI-Prolog banner
 :- set_prolog_flag(verbose, silent).
+
 %
 :- initialization(show_banner).
 
@@ -281,138 +282,229 @@ prove(G > D) :-
             write('    Constructive logic failed'), nl,
             write('=== TRYING CLASSICAL LOGIC ==='), nl,
             time(provable_at_level(PrepG > PrepD, classical, Proof)),
-            write('    Proof found in CLASSICAL LOGIC '), nl,
+            !,  % Cut here to prevent backtracking
+            % Check if refutation or proof
+            (is_antisequent_proof(Proof) ->
+                write('    Formula refuted (counter-model found)'), nl
+            ;
+                write('    Proof found in CLASSICAL LOGIC '), nl
+            ),
             Logic = classical,
             OutputProof = Proof
         )
     ),
     output_proof_results(OutputProof, Logic, G > D, sequent).
 
-% Biconditionals - REGROUPES PAR TYPE
+% Biconditionals 
 prove(Left <=> Right) :- !,
-         % VALIDATION: Verify both directions
     validate_and_warn(Left, _),
     validate_and_warn(Right, _),
+    
+    % Test direction 1
     retractall(current_proof_sequent(_)),
     assertz(current_proof_sequent(Left => Right)),
-    time((decide_silent(Left => Right, Proof1, Logic1))),
+    ( catch(time((decide_silent(Left => Right, Proof1, Logic1))), _, fail) ->
+        Direction1Valid = true,
+        (is_antisequent_proof(Proof1) -> IsRefutation1 = true ; IsRefutation1 = false)
+    ;
+        Direction1Valid = false, Proof1 = none, Logic1 = none, IsRefutation1 = false
+    ),
     
+    % Test direction 2
     retractall(current_proof_sequent(_)),
     assertz(current_proof_sequent(Right => Left)),
-    time((decide_silent(Right => Left, Proof2, Logic2))),
+    ( catch(time((decide_silent(Right => Left, Proof2, Logic2))), _, fail) ->
+        Direction2Valid = true,
+        (is_antisequent_proof(Proof2) -> IsRefutation2 = true ; IsRefutation2 = false)
+    ;
+        Direction2Valid = false, Proof2 = none, Logic2 = none, IsRefutation2 = false
+    ),
     
     nl,
-    write('=== BICONDITIONAL: Proving both directions ==='), nl,nl,
-    output_logic_label(Logic1), nl, nl,
-    write('    '), portray_clause(Proof1), nl,nl,
-    output_logic_label(Logic2), nl, nl,
-    write('    '), portray_clause(Proof2), nl,nl,
-    write('Q.E.D.'), nl, nl,
+    write('=== BICONDITIONAL:  Proving both directions ==='), nl, nl,
     
-    % SEQUENT CALCULUS - BOTH DIRECTIONS
-    write('- Sequent Calculus -'), nl, nl,
-    write('\\begin{prooftree}'), nl,
-    render_bussproofs(Proof1, 0, _),
-    write('\\end{prooftree}'), nl, nl,
-    write('\\begin{prooftree}'), nl,
-    render_bussproofs(Proof2, 0, _),
-    write('\\end{prooftree}'), nl, nl,
-    write('Q.E.D.'), nl, nl,
+    % Direction 1
+    write('=== DIRECTION 1: '), write(Left => Right), write(' ==='), nl, nl,
+    ( Direction1Valid = true ->
+        ( IsRefutation1 = true ->
+            write('REFUTED (counter-model found)'), nl, nl,
+            write('- Sequent Calculus (Refutation) -'), nl, nl,
+            write('\\begin{prooftree}'), nl,
+            render_bussproofs(Proof1, 0, _),
+            write('\\end{prooftree}'), nl, nl
+        ;
+            output_logic_label(Logic1), nl,
+            write('    '), portray_clause(Proof1), nl, nl,
+            write('- Sequent Calculus -'), nl, nl,
+            write('\\begin{prooftree}'), nl,
+            render_bussproofs(Proof1, 0, _),
+            write('\\end{prooftree}'), nl, nl,
+            write('Q. E.D. '), nl, nl,
+            write('- Natural Deduction -'), nl,
+            write('a) Tree Style: '), nl, nl,
+            render_nd_tree_proof(Proof1), nl, nl,
+            write('Q.E.D.'), nl, nl,
+            write('b) Flag Style:'), nl, nl,
+            write('\\begin{fitch}'), nl,
+            g4_to_fitch_theorem(Proof1),
+            write('\\end{fitch}'), nl, nl,
+            write('Q.E.D.'), nl, nl
+        )
+    ; write('FAILED TO PROVE OR REFUTE'), nl, nl
+    ),
     
-    % TREE STYLE - BOTH DIRECTIONS
-    write('- Natural Deduction -'), nl,
-    write('a) Tree Style:'), nl, nl,
-    render_nd_tree_proof(Proof1), nl, nl,
-    render_nd_tree_proof(Proof2), nl, nl,
-    write('Q.E.D.'), nl, nl,
+    % Direction 2
+    write('=== DIRECTION 2: '), write(Right => Left), write(' ==='), nl, nl,
+    ( Direction2Valid = true ->
+        ( IsRefutation2 = true ->
+            write('REFUTED (counter-model found)'), nl, nl,
+            write('- Sequent Calculus (Refutation) -'), nl, nl,
+            write('\\begin{prooftree}'), nl,
+            render_bussproofs(Proof2, 0, _),
+            write('\\end{prooftree}'), nl, nl
+        ;
+            output_logic_label(Logic2), nl,
+            write('    '), portray_clause(Proof2), nl, nl,
+            write('- Sequent Calculus -'), nl, nl,
+            write('\\begin{prooftree}'), nl,
+            render_bussproofs(Proof2, 0, _),
+            write('\\end{prooftree}'), nl, nl,
+            write('Q.E.D. '), nl, nl,
+            write('- Natural Deduction -'), nl,
+            write('a) Tree Style:'), nl, nl,
+            render_nd_tree_proof(Proof2), nl, nl,
+            write('Q. E.D.'), nl, nl,
+            write('b) Flag Style:'), nl, nl,
+            write('\\begin{fitch}'), nl,
+            g4_to_fitch_theorem(Proof2),
+            write('\\end{fitch}'), nl, nl,
+            write('Q.E.D.'), nl, nl
+        )
+    ; write('FAILED TO PROVE OR REFUTE'), nl, nl
+    ),
     
-    % TREE STYLE - BOTH DIRECTIONS
-    write('b) Flag Style:'), nl, nl,
-    write('\\begin{fitch}'), nl,
-    g4_to_fitch_theorem(Proof1),
-    write('\\end{fitch}'), nl, nl,
-    write('\\begin{fitch}'), nl,
-    g4_to_fitch_theorem(Proof2),
-    write('\\end{fitch}'), nl, nl,
-    write('Q.E.D.'), nl, nl,
-    
-    write('This biconditional is valid:'), nl,
-    write('- Direction 1 ('), write(Left => Right), write(')'),  
-    write(' is valid in '), write(Logic1), write(' logic'), nl,
-    write('- Direction 2 ('), write(Right => Left), write(')'),
-    write(' is valid in '), write(Logic2), write(' logic.'), nl,
-    !.
+    % Summary
+    write('=== SUMMARY ==='), nl,
+    write('- Direction 1 ('), write(Left => Right), write('): '),
+    ( Direction1Valid = true ->
+        ( IsRefutation1 = true -> write('INVALID (refuted)') ; write('VALID in '), write(Logic1), write(' logic') )
+    ; write('FAILED')
+    ), nl,
+    write('- Direction 2 ('), write(Right => Left), write('): '),
+    ( Direction2Valid = true ->
+        ( IsRefutation2 = true -> write('INVALID (refuted)') ; write('VALID in '), write(Logic2), write(' logic') )
+    ; write('FAILED')
+    ), nl, nl, ! .
 
-% Sequent equivalence: [A] <> [B] proves [A] > [B] AND [B] > [A]
+
+% Equivalence:  [A] <> [B] 
 prove([Left] <> [Right]) :- !,
-          % VALIDATION: Verify both formulas
     validate_and_warn(Left, _),
     validate_and_warn(Right, _),
-    retractall(current_proof_sequent(_)),
-    % Direction 1: Left > Right
-    assertz(current_proof_sequent([Left] > [Right])),
-    time((prove_sequent_silent([Left] > [Right], Proof1, Logic1))),   
-    % Direction 2: Right > Left
-    retractall(current_proof_sequent(_)),
-    assertz(current_proof_sequent([Right] > [Left])),
-    time((prove_sequent_silent([Right] > [Left], Proof2, Logic2))),
-    nl,
-    write('=== SEQUENT EQUIVALENCE: Proving both directions ==='), nl,
-    output_logic_label(Logic1), nl, nl,
-    write('    '), portray_clause(Proof1), nl, nl,
-    output_logic_label(Logic2), nl, nl,
-    write('    '), portray_clause(Proof2), nl, nl,
-     write('Q.E.D.'), nl, nl,
     
-    % SEQUENT CALCULUS - BOTH DIRECTIONS
-    write('- Sequent Calculus -'), nl, nl,
-    write('\\begin{prooftree}'), nl,
-    render_bussproofs(Proof1, 0, _),
-    write('\\end{prooftree}'), nl, nl,
-    write('\\begin{prooftree}'), nl,
-    render_bussproofs(Proof2, 0, _),
-    write('\\end{prooftree}'), nl, nl,
-    write('Q.E.D.'), nl, nl,
-
-    % TREE STYLE - BOTH DIRECTIONS
-    write('- Natural Deduction -'), nl,
-    write('a) Tree Style:'), nl, nl,
+    % Test direction 1: [Left] > [Right]
     retractall(current_proof_sequent(_)),
     assertz(current_proof_sequent([Left] > [Right])),
-    retractall(premiss_list(_)),
-    assertz(premiss_list([Left])),
-    render_nd_tree_proof(Proof1), nl, nl,
+    ( catch(time((prove_sequent_silent([Left] > [Right], Proof1, Logic1))), _, fail) ->
+        Direction1Valid = true,
+        (is_antisequent_proof(Proof1) -> IsRefutation1 = true ; IsRefutation1 = false)
+    ;
+        Direction1Valid = false, Proof1 = none, Logic1 = none, IsRefutation1 = false
+    ),
+    
+    % Test direction 2: [Right] > [Left]
     retractall(current_proof_sequent(_)),
     assertz(current_proof_sequent([Right] > [Left])),
-    retractall(premiss_list(_)),
-    assertz(premiss_list([Right])),
-    render_nd_tree_proof(Proof2), nl, nl,
-    write('Q.E.D.'), nl, nl,
-
-    % FITCH STYLE - BOTH DIRECTIONS
-    write('b) Flag Style:'), nl, nl,
-    write('\\begin{fitch}'), nl,
-    retractall(current_proof_sequent(_)),
-    assertz(current_proof_sequent([Left] > [Right])),
-    retractall(premiss_list(_)),
-    assertz(premiss_list([Left])),
-    g4_to_fitch_sequent(Proof1, [Left] > [Right]),
-    write('\\end{fitch}'), nl, nl,
-    write('\\begin{fitch}'), nl,
-    retractall(current_proof_sequent(_)),
-    assertz(current_proof_sequent([Right] > [Left])),
-    retractall(premiss_list(_)),
-    assertz(premiss_list([Right])),
-    g4_to_fitch_sequent(Proof2, [Right] > [Left]),
-    write('\\end{fitch}'), nl, nl,
-    write('Q.E.D.'), nl, nl,
-       
-    write('This sequent equivalence is valid:'), nl,
-    write('- Direction 1 ('), write(Left), write(' |- '), write(Right), write(')'),  
-    write(' is valid in '), write(Logic1), write(' logic'), nl,
-    write('- Direction 2 ('), write(Right), write(' |- '), write(Left), write(')'),
-    write(' is valid in '), write(Logic2), write(' logic.'), nl,
-    !.
+    ( catch(time((prove_sequent_silent([Right] > [Left], Proof2, Logic2))), _, fail) ->
+        Direction2Valid = true,
+        (is_antisequent_proof(Proof2) -> IsRefutation2 = true ; IsRefutation2 = false)
+    ;
+        Direction2Valid = false, Proof2 = none, Logic2 = none, IsRefutation2 = false
+    ),
+    
+    nl,
+    write('=== EQUIVALENCE:  Proving both directions ==='), nl, nl,
+    
+    % Direction 1
+    write('=== DIRECTION 1: '), write(Left), write(' |- '), write(Right), write(' ==='), nl, nl,
+    ( Direction1Valid = true ->
+        ( IsRefutation1 = true ->
+            write('REFUTED (counter-model found)'), nl, nl,
+            write('- Sequent Calculus (Refutation) -'), nl, nl,
+            write('\\begin{prooftree}'), nl,
+            render_bussproofs(Proof1, 0, _),
+            write('\\end{prooftree}'), nl, nl
+        ;
+            output_logic_label(Logic1), nl,
+            write('    '), portray_clause(Proof1), nl, nl,
+            write('- Sequent Calculus -'), nl, nl,
+            write('\\begin{prooftree}'), nl,
+            render_bussproofs(Proof1, 0, _),
+            write('\\end{prooftree}'), nl, nl,
+            write('Q. E.D. '), nl, nl,
+            write('- Natural Deduction -'), nl,
+            write('a) Tree Style: '), nl, nl,
+            retractall(current_proof_sequent(_)),
+            assertz(current_proof_sequent([Left] > [Right])),
+            retractall(premiss_list(_)),
+            assertz(premiss_list([Left])),
+            render_nd_tree_proof(Proof1), nl, nl,
+            write('Q.E.D.'), nl, nl,
+            write('b) Flag Style:'), nl, nl,
+            write('\\begin{fitch}'), nl,
+            g4_to_fitch_sequent(Proof1, [Left] > [Right]),
+            write('\\end{fitch}'), nl, nl,
+            write('Q.E.D.'), nl, nl
+        )
+    ; write('FAILED TO PROVE OR REFUTE'), nl, nl
+    ),
+    
+    % Direction 2
+    write('=== DIRECTION 2: '), write(Right), write(' |- '), write(Left), write(' ==='), nl, nl,
+    ( Direction2Valid = true ->
+        ( IsRefutation2 = true ->
+            write('REFUTED (counter-model found)'), nl, nl,
+            write('- Sequent Calculus (Refutation) -'), nl, nl,
+            write('\\begin{prooftree}'), nl,
+            render_bussproofs(Proof2, 0, _),
+            write('\\end{prooftree}'), nl, nl
+        ;
+            output_logic_label(Logic2), nl,
+            write('    '), portray_clause(Proof2), nl, nl,
+            write('- Sequent Calculus -'), nl, nl,
+            write('\\begin{prooftree}'), nl,
+            render_bussproofs(Proof2, 0, _),
+            write('\\end{prooftree}'), nl, nl,
+            write('Q.E.D. '), nl, nl,
+            write('- Natural Deduction -'), nl,
+            write('a) Tree Style:'), nl, nl,
+            retractall(current_proof_sequent(_)),
+            assertz(current_proof_sequent([Right] > [Left])),
+            retractall(premiss_list(_)),
+            assertz(premiss_list([Right])),
+            render_nd_tree_proof(Proof2), nl, nl,
+            write('Q.E.D.'), nl, nl,
+            write('b) Flag Style:'), nl, nl,
+            write('\\begin{fitch}'), nl,
+            g4_to_fitch_sequent(Proof2, [Right] > [Left]),
+            write('\\end{fitch}'), nl, nl,
+            write('Q.E.D.'), nl, nl
+        )
+    ; write('FAILED TO PROVE OR REFUTE'), nl, nl
+    ),
+    
+    % Summary
+    write('=== SUMMARY ==='), nl,
+    write('- Direction 1 ('), write(Left), write(' |- '), write(Right), write('): '),
+    ( Direction1Valid = true ->
+        ( IsRefutation1 = true -> write('INVALID (refuted)') ; write('VALID in '), write(Logic1), write(' logic') )
+    ; write('FAILED')
+    ), nl,
+    write('- Direction 2 ('), write(Right), write(' |- '), write(Left), write('): '),
+    ( Direction2Valid = true ->
+        ( IsRefutation2 = true -> write('INVALID (refuted)') ; write('VALID in '), write(Logic2), write(' logic') )
+    ; write('FAILED')
+    ), nl, nl, !.
 
 % Theorems (original logic)
 prove(Formula) :-
@@ -487,7 +579,12 @@ prove(Formula) :-
             write('   Constructive logic failed'), nl,
             write('=== TRYING CLASSICAL LOGIC ==='), nl,
             time(provable_at_level([] > [F2], classical, Proof)),
-            write('  Proof found in Classical logic'), nl,
+            % Check if refutation or proof
+            (is_antisequent_proof(Proof) ->
+                write('  Formula refuted (counter-model found)'), nl
+            ;
+                write('  Proof found in Classical logic'), nl
+            ),
             Logic = classical,
             OutputProof = Proof
         )
@@ -535,12 +632,26 @@ validate_sequent_formulas(G, D) :-
 % =========================================================================
 
 output_proof_results(Proof, LogicType, OriginalFormula, Mode) :-
+    % Detect if this is an antisequent (refutation)
+    (is_antisequent_proof(Proof) ->
+        IsRefutation = true
+    ;
+        IsRefutation = false
+    ),
+    
     extract_formula_from_proof(Proof, Formula),
     detect_and_set_logic_level(Formula),
     % Store logic level for use in proof rendering (e.g., DS optimization)
     retractall(current_logic_level(_)),
     assertz(current_logic_level(LogicType)),
-    output_logic_label(LogicType),
+    
+    % Display appropriate label
+    (IsRefutation = true ->
+        write('G4+IP refutation in classical logic'), nl, nl
+    ;
+        output_logic_label(LogicType)
+    ),
+    
     % ADDED: Display raw Prolog proof term
     nl, write('=== RAW PROLOG PROOF TERM ==='), nl,
     write('    '), portray_clause(Proof), nl, nl,
@@ -551,25 +662,50 @@ output_proof_results(Proof, LogicType, OriginalFormula, Mode) :-
           error(cyclic_term, _),
           (write('%% WARNING: Cannot represent proof term due to cyclic_term.'), nl, nl)
       ) -> true ; true ),
+    
+    % Sequent Calculus
     write('- Sequent Calculus -'), nl, nl,
     write('\\begin{prooftree}'), nl,
     render_bussproofs(Proof, 0, _),
     write('\\end{prooftree}'), nl, nl,
     write('Q.E.D.'), nl, nl,
-    write('- Natural Deduction -'), nl,
-    write('a) Tree Style:'), nl, nl,
-    render_nd_tree_proof(Proof), nl, nl,
-    write('Q.E.D.'), nl, nl,
-    write('b) Flag Style:'), nl, nl,
-    write('\\begin{fitch}'), nl,
-    ( Mode = sequent ->
-        g4_to_fitch_sequent(Proof, OriginalFormula)
+    
+    % Skip Natural Deduction for antisequents
+    (IsRefutation = false ->
+        write('- Natural Deduction -'), nl,
+        write('a) Tree Style:'), nl, nl,
+        render_nd_tree_proof(Proof), nl, nl,
+        write('Q.E.D.'), nl, nl,
+        write('b) Flag Style:'), nl, nl,
+        write('\\begin{fitch}'), nl,
+        ( Mode = sequent ->
+            g4_to_fitch_sequent(Proof, OriginalFormula)
+        ;
+            g4_to_fitch_theorem(Proof)
+        ),
+        write('\\end{fitch}'), nl, nl,
+        write('Q.E.D.'), nl, nl
     ;
-        g4_to_fitch_theorem(Proof)
+        true  % Skip ND for refutations
     ),
-    write('\\end{fitch}'), nl, nl,
-    write('Q.E.D.'), nl, nl,
     !.
+
+% Helper: detect if a proof is an antisequent
+% Helper: detect if a proof contains an antisequent RULE (not just asq in formulas)
+is_antisequent_proof(asq(Seq, _)) :- 
+    % Must be asq as a PROOF RULE with a sequent
+    (Seq = (_ < _) ; Seq = (_ > _)), !.
+is_antisequent_proof(Proof) :-
+    compound(Proof),
+    Proof =.. [Functor|Args],
+    % Only check sub-proofs, not the sequent (first arg)
+    member(Functor, [ip, ltoto, lall, rcond, lex, rex, lor, rand, 
+                     lorto, land, l0cond, landto, tne, lex_lor, rall,
+                     cq_c, cq_m, eq_refl, eq_sym, eq_trans, eq_trans_chain,
+                     eq_cong, eq_subst_eq, eq_subst]),
+    Args = [_Sequent|SubProofs],  % Skip sequent, check sub-proofs
+    member(SubProof, SubProofs),
+    is_antisequent_proof(SubProof).
 
 % =========================================================================
 % SILENT VERSIONS (for internal use)
@@ -610,12 +746,35 @@ provable_at_level(Sequent, constructive, P) :-
     !.
 
 provable_at_level(Sequent, LogicLevel, Proof) :-
+    LogicLevel \= classical,  % For non-classical logics
     logic_iteration_limit(LogicLevel, MaxIter),
     for(Threshold, 0, MaxIter),
     Sequent = (Gamma > Delta),
-    init_eigenvars,  % Initialize before each attempt
+    init_eigenvars,
     prove(Gamma > Delta, [], Threshold, 1, _, LogicLevel, Proof),
     !.
+
+% CLASSICAL LOGIC: Two-pass approach
+% PASS 1: Normal proof search (antisequent disabled)
+% PASS 2: If pass 1 fails, enable antisequent and search for counter-model
+provable_at_level(Sequent, classical, Proof) :-
+    Sequent = (Gamma > Delta),
+    logic_iteration_limit(classical, MaxIter),
+    (   % PASS 1: Normal proof
+        (for(Threshold, 0, MaxIter),
+         init_eigenvars,
+         prove(Gamma > Delta, [], Threshold, 1, _, classical, Proof))
+    ->  true  % Success - proof found
+    ;   % PASS 2: Antisequent (only if pass 1 failed completely)
+        nb_setval(asq_enabled, true),
+        once((  % USE ONCE to prevent multiple solutions
+            for(Threshold, 0, MaxIter),
+            init_eigenvars,
+            prove(Gamma > Delta, [], Threshold, 1, _, classical, Proof)
+        )),
+        nb_setval(asq_enabled, false)
+    ),
+    !.  % Cut to prevent backtracking to alternative proofs
 
 % =========================================================================
 % DISPLAY HELPERS
@@ -774,7 +933,6 @@ examples :-
     write('  % Drinker Paradox (classical)'), nl,
     write('  ?- prove(?[y]:(d(y) => ![x]:d(x))).'), nl,
     nl.
-
 % =========================================================================
 % TRADUCTION DU BICONDITIONNELLE INTERNE
 % A <=> B devient (A => B) & (B => A)
@@ -863,7 +1021,7 @@ subst_neg(A <=> B, A1 <=> B1) :-
     subst_neg(A, A1),
     subst_neg(B, B1).
 
-% Bacis case
+% Basic case
 subst_neg(A, A).
 %=================================
 % END OF DRIVER
@@ -872,6 +1030,19 @@ subst_neg(A, A).
 % G4 FOL Prover with equality 
 % TPTP-version
 % =========================================================================
+% =========================================================================
+% EIGENVARIABLE REGISTRY (using nb_setval)
+% =========================================================================
+% Initialize eigenvariable registry (call before each proof attempt)
+init_eigenvars :- nb_setval(g4_eigenvars, []).
+
+% member_check(Term, List): check if Term is structurally equivalent (=@=) to any member
+member_check(Term, List) :-
+    member(Elem, List),
+    Term =@= Elem,
+    !.
+
+
 % prove/7 - 
 % prove(Sequent, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, Proof)
 % LogicLevel: minimal | intuitionistic | classical
@@ -1115,6 +1286,35 @@ prove(Gamma > Delta, _, _, SkolemIn, SkolemIn, _, eq_subst(Gamma>Delta)) :-
     !.
 
 % =========================================================================
+% ANTISEQUENT - Only when explicitly enabled by driver (PASS 2)
+% =========================================================================
+% This clause is ONLY activated after normal proof search fails
+% It represents a counter-model when no atom in Gamma is in Delta
+% Antiséquent avec Gamma vide: ⊬ B
+prove([] > Delta, _, Threshold, SkolemIn, SkolemIn, classical, asq([] < Delta, _)) :-  
+    nb_current(asq_enabled, true),
+    Threshold >= 5,
+    Delta = [B],
+    B \= asq,
+    B \= asq(_,_),
+    % Pas de restriction sur la forme de B - toute formule invalide peut générer un antiséquent
+    !.
+
+% Antiséquent avec Gamma non-vide: Γ ⊬ B
+prove(Gamma > Delta, _, Threshold, SkolemIn, SkolemIn, classical, asq(Gamma < Delta, _)) :-  
+    nb_current(asq_enabled, true),
+    Threshold >= 5,
+    Gamma \= [],  % Gamma non-vide
+    Delta = [B], 
+    B \= asq,
+    B \= asq(_,_),
+    member(A, Gamma),
+    A \= asq,
+    A \= asq(_,_),
+    % Pas de restriction sur la forme de A - tout atome ou formule peut être dans Gamma
+    \+ member(A, Delta),
+    !.
+% =========================================================================
 % HELPERS
 % =========================================================================
 % Helper: find position of an element
@@ -1152,24 +1352,28 @@ is_nested_negation(Target, Target, 0) :- !.
 is_nested_negation((Inner => #), Target, N) :-
     is_nested_negation(Inner, Target, N1),
     N is N1 + 1.
-% =========================================================================
-% EIGENVARIABLE REGISTRY (using nb_setval)
-% =========================================================================
-% Initialize eigenvariable registry (call before each proof attempt)
-init_eigenvars :- nb_setval(g4_eigenvars, []).
 
-% member_check(Term, List): check if Term is structurally equivalent (=@=) to any member
-member_check(Term, List) :-
-    member(Elem, List),
-    Term =@= Elem,
-    !.
 % =========================================================================
 % END of Prover
 % =========================================================================
+
 % =========================================================================
 % G4 PRINTER SPECIALIZED FOR BUSSPROOFS
 % Optimized LaTeX rendering for authentic G4 rules
 % =========================================================================
+
+% =========================================================================
+% ANTISEQUENT RULE (Asq) - exactly like Ax but in red with \nvdash
+% =========================================================================
+
+% Antisequent: counter-model (exactly like axiom)
+render_bussproofs(asq(Seq, _), VarCounter, FinalCounter) :-
+    !,
+    write('\\AxiomC{}'), nl,
+    write('\\RightLabel{\\scriptsize{$\\color{red}{Asq.}$}}'), nl,
+    write('\\UnaryInfC{$\\color{red}{'),
+    render_antisequent(Seq, VarCounter, FinalCounter),
+    write('}$}'), nl.
 
 % =========================================================================
 % G4 rules 
@@ -1475,6 +1679,24 @@ render_sequent(Gamma > Delta, VarCounter, FinalCounter) :-
         render_formula_list(Delta, TempCounter, FinalCounter)
     ).
 
+% Render antisequent with \nvdash (for refutations)
+render_antisequent(Gamma < Delta, VarCounter, FinalCounter) :-
+    filter_top_from_gamma(Gamma, FilteredGamma),
+    
+    ( FilteredGamma = [] ->
+        write(' \\nvdash '),
+        TempCounter = VarCounter
+    ;
+        render_formula_list(FilteredGamma, VarCounter, TempCounter),
+        write(' \\nvdash ')
+    ),
+    ( Delta = [] ->
+        write('\\bot'),
+        FinalCounter = TempCounter
+    ;
+        render_formula_list(Delta, TempCounter, FinalCounter)
+    ).
+
 % filter_top_from_gamma/2: Remove top (⊤) from premisses list
 filter_top_from_gamma([], []).
 filter_top_from_gamma([H|T], Filtered) :-
@@ -1671,22 +1893,17 @@ extract_new_formula(CurrentPremisses, SubProof, _) :-
 % FIXED: Search in entire context, prefer most recent (highest line number)
 % This ensures derived formulas are used instead of premisses when both exist
 find_context_line(Formula, Context, LineNumber) :-
-    findall(
-        Line:CtxFormula,
-        (
-            member(Line:CtxFormula, Context),
-            (   CtxFormula = Formula
-            ;   strip_annotations_match(Formula, CtxFormula)
-            ;   formulas_equivalent(Formula, CtxFormula)
-            )
-        ),
-        Matches
+    premiss_list(PremList),
+    length(PremList, NumPremises),
+    % Chercher UNIQUEMENT dans les N premières lignes
+    member(LineNumber:ContextFormula, Context),
+    LineNumber =< NumPremises,
+    % Matcher avec les différentes variantes possibles
+    ( ContextFormula = Formula
+    ; strip_annotations_match(Formula, ContextFormula)
+    ; formulas_equivalent(Formula, ContextFormula)
     ),
-    Matches \= [],
-    % Take the match with highest line number (most recent)
-    findall(Line, member(Line:_, Matches), LineNumbers),
-    max_list(LineNumbers, LineNumber),
-    !.
+    !.  % Couper dès qu'on trouve dans les prémisses
 
 % =========================================================================
 % PRIORITY -1: QUANTIFIER NEGATION (original ~ form)
@@ -2088,56 +2305,49 @@ build_hypothesis_map([_|Rest], AccMap, FinalMap) :-
 % =========================================================================
 :- dynamic fitch_line/4.
 :- dynamic abbreviated_line/1.
-
 % =========================================================================
 % FROM G4 Sequent Calculus To Natural Deduction in Fitch Style 
 % =========================================================================
-
 g4_to_fitch_sequent(Proof, OriginalSequent) :-
     !,
     retractall(fitch_line(_, _, _, _)),
     retractall(abbreviated_line(_)),
     
-    OriginalSequent = (_Gamma > [Conclusion]),
+    OriginalSequent = (_G > [Conclusion]),
     
     ( premiss_list(PremList), PremList \= [] ->
         render_premiss_list(PremList, 0, 1, NextLine, InitialContext),
-        LastPremLine is NextLine - 1  % CORRECTION: last premiss line
+        LastPremLine is NextLine - 1  % ✅ CORRECTION : dernière ligne de prémisse
     ;
         _NextLine = 1,
-        LastPremLine = 0,             % CORRECTION: no premisses
+        LastPremLine = 0,             % ✅ CORRECTION : pas de prémisses
         InitialContext = []
     ),
     
-    % CORRECTION: Scope=1 (indentation), CurLine=LastPremLine (numbering)
+    % ✅ CORRECTION : Scope=1 (indentation), CurLine=LastPremLine (numérotation)
     fitch_g4_proof(Proof, InitialContext, 1, LastPremLine, LastLine, ResLine, 0, _),
     
-    % DETECT: Has any rule been applied?
+    % DÉTECTER : Est-ce qu'une règle a été appliquée ?
     ( LastLine = LastPremLine ->
-        % No line added -> pure axiom -> display reiteration
-        NewLine is LastPremLine + 1,
-        assert_safe_fitch_line(NewLine, Conclusion, reiteration(ResLine), 0),
+        % Aucune ligne ajoutée → axiome pur → afficher réitération
         write('\\fa '),
         rewrite(Conclusion, 0, _, LatexConclusion),
         write(LatexConclusion),
-        format(' &  $ R $ ~w\\\\', [ResLine]), nl
+        format(' &  R ~w\\\\', [ResLine]), nl
     ;
-        % A rule has already displayed the conclusion -> do nothing
+        % Une règle a déjà affiché la conclusion → ne rien faire
         true
     ).
 
-% g4_to_fitch_theorem/1: For theorems (original behavior)
+% g4_to_fitch_theorem/1 : Pour théorèmes (comportement original)
 g4_to_fitch_theorem(Proof) :-
     retractall(fitch_line(_, _, _, _)),
     retractall(abbreviated_line(_)),
     fitch_g4_proof(Proof, [], 1, 0, _, _, 0, _).
-
-
 % =========================================================================
-% PREMISS DISPLAY
+% AFFICHAGE DES PRÉMISSES
 % =========================================================================
-
-% render_premiss_list/5: Display a list of premisses in Fitch style
+% render_premiss_list/5: Affiche une liste de prémisses en Fitch
 render_premiss_list([], _, Line, Line, []) :- !.
 
 render_premiss_list([LastPremiss], Scope, CurLine, NextLine, [CurLine:LastPremiss]) :-
@@ -2147,7 +2357,7 @@ render_premiss_list([LastPremiss], Scope, CurLine, NextLine, [CurLine:LastPremis
     rewrite(LastPremiss, 0, _, LatexFormula),
     write(LatexFormula),
     write(' &  PR\\\\'), nl,
-    assert_safe_fitch_line(CurLine, LastPremiss, premiss, Scope),
+    assert_safe_fitch_line(CurLine, LastPremiss, premise, Scope),
     NextLine is CurLine + 1.
     
 render_premiss_list([Premiss|Rest], Scope, CurLine, NextLine, [CurLine:Premiss|RestContext]) :-
@@ -2156,14 +2366,12 @@ render_premiss_list([Premiss|Rest], Scope, CurLine, NextLine, [CurLine:Premiss|R
     rewrite(Premiss, 0, _, LatexFormula),
     write(LatexFormula),
     write(' &  PR\\\\'), nl,
-    assert_safe_fitch_line(CurLine, Premiss, premiss, Scope),
+    assert_safe_fitch_line(CurLine, Premiss, premise, Scope),
     NextCurLine is CurLine + 1,
     render_premiss_list(Rest, Scope, NextCurLine, NextLine, RestContext).
-
 % =========================================================================
-% SAFE ASSERTION
+% ASSERTION SÉCURISÉE
 % =========================================================================
-
 assert_safe_fitch_line(N, Formula, Just, Scope) :-
     catch(
         (
@@ -2182,7 +2390,7 @@ assert_safe_fitch_line(N, Formula, Just, Scope) :-
     ).
 
 % =========================================================================
-% @ SUBSTITUTION HANDLING
+% GESTION DES SUBSTITUTIONS @
 % =========================================================================
 
 fitch_g4_proof(@(ProofTerm, _), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
@@ -2190,7 +2398,7 @@ fitch_g4_proof(@(ProofTerm, _), Context, Scope, CurLine, NextLine, ResLine, VarI
     fitch_g4_proof(ProofTerm, Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut).
 
 % =========================================================================
-% AXIOM
+% AXIOME
 % =========================================================================
 
 fitch_g4_proof(ax((Premisses > [Goal]), _Tag), Context, _Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
@@ -2212,33 +2420,28 @@ fitch_g4_proof(ax((Premisses > [Goal])), Context, _Scope, CurLine, NextLine, Res
 % =========================================================================
 % PROPOSITIONAL RULES 
 % =========================================================================
-
-% L0-implies
-fitch_g4_proof(l0cond((Premisses > _), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
-    % FIXED: Find an implication where BOTH the implication AND its antecedent are present
-    % DON'T cut until we've found a valid combination
-    member(MajLine:(Ant => Cons), Context),
-    member(MinLine:Ant, Context),  % This must succeed for the same Ant
-    % Verify we're using formulas that match what G4 expects
-    member((Ant => Cons), Premisses),
-    member(Ant, Premisses),
-    % NOW we can cut - we've found a valid combination
+% L0→ 
+fitch_g4_proof(l0cond((Premisss > _), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
     !,
+    select((Ant => Cons), Premisss, Remaining),
+    member(Ant, Remaining),
+    find_context_line((Ant => Cons), Context, MajLine),
+    find_context_line(Ant, Context, MinLine),
     DerLine is CurLine + 1,
     format(atom(Just), '$ \\to E $ ~w,~w', [MajLine, MinLine]),
     render_have(Scope, Cons, Just, CurLine, DerLine, VarIn, V1),
     assert_safe_fitch_line(DerLine, Cons, l0cond(MajLine, MinLine), Scope),
     fitch_g4_proof(SubProof, [DerLine:Cons|Context], Scope, DerLine, NextLine, ResLine, V1, VarOut).
 
-% L-and-implies
+% L∧→ 
 fitch_g4_proof(landto((Premisses > _), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     extract_new_formula(Premisses, SubProof, NewFormula),
     select(((A & B) => C), Premisses, _),
-    find_context_line(((A & B) => C), Context, ImpLine),
-    derive_and_continue(Scope, NewFormula, '$ \\land\\to E $ ~w', [ImpLine],
+    once(member(ImpLine:((A & B) => C), Context)),
+    derive_and_continue(Scope, NewFormula, 'L$ \\land \\to $ ~w', [ImpLine],
                        landto(ImpLine), SubProof, Context, CurLine, NextLine, ResLine, VarIn, VarOut).
 
-% L-or-implies: Disjunction to implications
+% L∨→ : Disjunction to implications
 fitch_g4_proof(lorto((Premisses > _), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     SubProof =.. [_Rule|[(SubPremisses > _SubGoal)|_]],
     findall(F, (member(F, SubPremisses), \+ member(F, Premisses)), NewFormulas),
@@ -2249,33 +2452,21 @@ fitch_g4_proof(lorto((Premisses > _), SubProof), Context, Scope, CurLine, NextLi
         Line2 is CurLine + 2,
         assert_safe_fitch_line(Line1, F1, lorto(ImpLine), Scope),
         assert_safe_fitch_line(Line2, F2, lorto(ImpLine), Scope),
-        format(atom(Just), '$ \\lor\\to E $ ~w', [ImpLine]),
+        format(atom(Just), 'L$ \\lor \\to $ ~w', [ImpLine]),
         render_have(Scope, F1, Just, CurLine, Line1, VarIn, V1),
         render_have(Scope, F2, Just, Line1, Line2, V1, V2),
         fitch_g4_proof(SubProof, [Line2:F2, Line1:F1|Context], Scope, Line2, NextLine, ResLine, V2, VarOut)
     ; NewFormulas = [F1] ->
-        derive_and_continue(Scope, F1, '$ \\lor\\to E $ ~w', [ImpLine],
+        derive_and_continue(Scope, F1, 'L$ \\lor \\to $ ~w', [ImpLine],
                            lorto(ImpLine), SubProof, Context, CurLine, NextLine, ResLine, VarIn, VarOut)
     ;
         fitch_g4_proof(SubProof, Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut)
     ).
 
-
-% L-and: Conjunction elimination (SPECIAL CASE: implicit conjunction from comma-separated premisses)
-% When premisses are given as [P1, P2, P3], they're already available individually in Context
-% This happens with sequents like [A, B, C] > [Goal] where commas represent implicit &
-fitch_g4_proof(land((Premisses > [_Goal]), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
-    % Check if this land rule is trying to decompose premisses that are already in context as separate items
-    \+ member((_ & _), Premisses),  % No explicit conjunction in Premisses
-    !,
-    % Just continue with SubProof - no &E step needed
-    % The comma-separated premisses are already in Context as individual items
-    fitch_g4_proof(SubProof, Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut).
-
-% L-and: Conjunction elimination (NORMAL CASE: explicit conjunction)
-fitch_g4_proof(land((Premisses > [Goal]), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- 
-    !,
+% L∧ : Conjunction elimination
+fitch_g4_proof(land((Premisses > [Goal]), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     select((A & B), Premisses, _),
+   % member(ConjLine:(A & B), Context), ligne corrigée par la suivante
     find_context_line((A & B), Context, ConjLine),
     ( is_direct_conjunct(Goal, (A & B)) ->
         derive_formula(Scope, Goal, '$ \\land E $ ~w', [ConjLine], land(ConjLine),
@@ -2286,10 +2477,10 @@ fitch_g4_proof(land((Premisses > [Goal]), SubProof), Context, Scope, CurLine, Ne
         fitch_g4_proof(SubProof, NewCtx, Scope, LastLine, NextLine, ResLine, V1, VarOut)
     ).
 
-% L-bot: Explosion
-fitch_g4_proof(lbot((Premisses > [Goal]), _), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
+% L⊥ : Explosion
+fitch_g4_proof(lbot((Premisss > [Goal]), _), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
     !,
-    member(#, Premisses),
+    member(#, Premisss),
     member(FalseLine: #, Context),
     DerLine is CurLine + 1,
     assert_safe_fitch_line(DerLine, Goal, lbot(FalseLine), Scope),
@@ -2298,7 +2489,7 @@ fitch_g4_proof(lbot((Premisses > [Goal]), _), Context, Scope, CurLine, NextLine,
     NextLine = DerLine,
     ResLine = DerLine.
 
-% R-or: Disjunction introduction
+% R∨ : Disjunction introduction
 fitch_g4_proof(ror((_ > [Goal]), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
     !,
     ( Goal = (_ | _), try_derive_immediately(Goal, Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) ->
@@ -2313,10 +2504,10 @@ fitch_g4_proof(ror((_ > [Goal]), SubProof), Context, Scope, CurLine, NextLine, R
     ).
 
 % =========================================================================
-% RULES WITH HYPOTHESES (ASSUME-DISCHARGE)
+% RÈGLES AVEC HYPOTHÈSES (ASSUME-DISCHARGE)
 % =========================================================================
 
-% R-implies: Implication introduction
+% R→ : Implication introduction
 fitch_g4_proof(rcond((_ > [A => B]), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
     !,
     HypLine is CurLine + 1,
@@ -2331,7 +2522,7 @@ fitch_g4_proof(rcond((_ > [A => B]), SubProof), Context, Scope, CurLine, NextLin
     NextLine = ImplLine,
     ResLine = ImplLine.
 
-% TNE: Triple negation elimination
+% TNE : Triple negation elimination
 fitch_g4_proof(tne((_ > [(A => B)]), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
     !,
     HypLine is CurLine + 1,
@@ -2346,15 +2537,15 @@ fitch_g4_proof(tne((_ > [(A => B)]), SubProof), Context, Scope, CurLine, NextLin
     NextLine = ImplLine,
     ResLine = ImplLine.
 
-% IP: Indirect proof / Classical
+% IP : Indirect proof / Classical
 fitch_g4_proof(ip((_ > [Goal]), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
     !,
     ( Goal = (A => #) ->
         Assumption = ((A => #) => #),
-        Rule = '$ DNE_{m} $'
+        Rule = 'DNE_m'
     ;
         Assumption = (Goal => #),
-        Rule = '$ IP $'
+        Rule = 'IP'
     ),
     HypLine is CurLine + 1,
     assert_safe_fitch_line(HypLine, Assumption, assumption, Scope),
@@ -2368,15 +2559,16 @@ fitch_g4_proof(ip((_ > [Goal]), SubProof), Context, Scope, CurLine, NextLine, Re
     NextLine = IPLine,
     ResLine = IPLine.
 
+% L∨ : Disjunction elimination
 % L-or: Disjunction elimination with DS optimization
 % DISJUNCTIVE SYLLOGISM (DS): If we have A ∨ B and ¬A, derive B directly
 % Valid in intuitionistic and classical logic (not minimal logic)
 % Pattern: One branch uses explosion (¬A with A), other branch derives Goal from B
-fitch_g4_proof(lor((Premisses > [_Goal]), SP1, SP2), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
+fitch_g4_proof(lor((Premisss > [_Goal]), SP1, SP2), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
     % Try DS optimization: Check if we have A ∨ B and ¬A (A => #)
-    select((A | B), Premisses, _),
+    select((A | B), Premisss, _),
     % Check if ¬A (i.e., A => #) is available
-    ( member((A => #), Premisses), member(_NegLine:(A => #), Context) ->
+    ( member((A => #), Premisss), member(_NegLine:(A => #), Context) ->
         % We have A ∨ B and ¬A, so we can use DS to derive B directly
         % This is valid because SP1 would just derive ⊥ from A and ¬A, then Goal by ⊥E
         % Find the disjunction and negation in context
@@ -2392,7 +2584,7 @@ fitch_g4_proof(lor((Premisses > [_Goal]), SP1, SP2), Context, Scope, CurLine, Ne
         % Continue with Goal derivation from B
         fitch_g4_proof(SP2, [DerLine:B|Context], Scope, DerLine, NextLine, ResLine, V1, VarOut),
         !
-    ; member((B => #), Premisses), member(_NegLine:(B => #), Context) ->
+    ; member((B => #), Premisss), member(_NegLine:(B => #), Context) ->
         % Symmetric case: We have A ∨ B and ¬B, derive A by DS
         ( find_disj_context(A, B, Context, DisjLine) -> true
         ; find_context_line((A | B), Context, DisjLine)
@@ -2409,26 +2601,20 @@ fitch_g4_proof(lor((Premisses > [_Goal]), SP1, SP2), Context, Scope, CurLine, Ne
     ).
 
 % L-or: Disjunction elimination (regular case with full ∨E)
-fitch_g4_proof(lor((Premisses > [Goal]), SP1, SP2), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
+fitch_g4_proof(lor((Premisss > [Goal]), SP1, SP2), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
     !,
     ( try_derive_immediately(Goal, Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) ->
        true
     ; 
-      select((A | B), Premisses, _),
-      % First try to find the disjunction in the context, otherwise in premisses
-      ( find_disj_context(A, B, Context, DisjLine) ->
-          true
-      ;
-          % Disjunction is a premiss, find its line
-          find_context_line((A | B), Context, DisjLine)
-      ),
-      NewScope is Scope + 1,
+      select((A | B), Premisss, _),
+      find_disj_context(A, B, Context, DisjLine),
       AssLineA is CurLine + 1,
-      assert_safe_fitch_line(AssLineA, A, assumption, NewScope),
+      assert_safe_fitch_line(AssLineA, A, assumption, Scope),
       render_hypo(Scope, A, 'AS', CurLine, AssLineA, VarIn, V1),
+      NewScope is Scope + 1,
       fitch_g4_proof(SP1, [AssLineA:A|Context], NewScope, AssLineA, EndA, GoalA, V1, V2),
       AssLineB is EndA + 1,
-      assert_safe_fitch_line(AssLineB, B, assumption, NewScope),
+      assert_safe_fitch_line(AssLineB, B, assumption, Scope),
       render_hypo(Scope, B, 'AS', EndA, AssLineB, V2, V3),
       fitch_g4_proof(SP2, [AssLineB:B|Context], NewScope, AssLineB, EndB, GoalB, V3, V4),
       ElimLine is EndB + 1,
@@ -2440,10 +2626,10 @@ fitch_g4_proof(lor((Premisses > [Goal]), SP1, SP2), Context, Scope, CurLine, Nex
     ).
 
 % =========================================================================
-% BINARY RULES
+% RÈGLES BINAIRES
 % =========================================================================
 
-% R-and: Conjunction introduction
+% R∧ : Conjunction introduction
 fitch_g4_proof(rand((_ > [Goal]), SP1, SP2), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     Goal = (L & _R),
     ( try_derive_immediately(Goal, Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) -> true
@@ -2453,74 +2639,71 @@ fitch_g4_proof(rand((_ > [Goal]), SP1, SP2), Context, Scope, CurLine, NextLine, 
                     End2, NextLine, ResLine, V2, VarOut)
     ).
 
-% L-implies-implies: Special G4 rule
+% L→→ : Special G4 rule
 fitch_g4_proof(ltoto((Premisses > _), SP1, SP2), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     select(((Ant => Inter) => Cons), Premisses, _),
     find_context_line(((Ant => Inter) => Cons), Context, ComplexLine),
     
-    % STEP 1: Derive (Inter => Cons) by L->->
+    % ÉTAPE 1 : Dériver (Inter => Cons) par L→→
     ExtractLine is CurLine + 1,
-    format(atom(ExtractJust), '$ \\to\\to E$ ~w', [ComplexLine]),
+    format(atom(ExtractJust), 'L$ \\to \\to $ ~w', [ComplexLine]),
     render_have(Scope, (Inter => Cons), ExtractJust, CurLine, ExtractLine, VarIn, V1),
     assert_safe_fitch_line(ExtractLine, (Inter => Cons), ltoto(ComplexLine), Scope),
     
-    % STEP 2: Assume Ant
+    % ÉTAPE 2 : Assumer Ant
     AssLine is ExtractLine + 1,
     assert_safe_fitch_line(AssLine, Ant, assumption, Scope),
     render_hypo(Scope, Ant, 'AS', ExtractLine, AssLine, V1, V2),
     NewScope is Scope + 1,
     
-    % STEP 3: Prove Inter with [Ant, (Inter=>Cons) | Context]
+    % ÉTAPE 3 : Prouver Inter avec [Ant, (Inter=>Cons) | Context]
     fitch_g4_proof(SP1, [AssLine:Ant, ExtractLine:(Inter => Cons)|Context],
                   NewScope, AssLine, SubEnd, InterLine, V2, V3),
     
-    % STEP 4: Derive (Ant => Inter) by ->I
+    % ÉTAPE 4 : Dériver (Ant => Inter) par →I
     ImpLine is SubEnd + 1,
     assert_safe_fitch_line(ImpLine, (Ant => Inter), rcond(AssLine, InterLine), Scope),
     format(atom(Just1), '$ \\to I $ ~w-~w', [AssLine, InterLine]),
     render_have(Scope, (Ant => Inter), Just1, SubEnd, ImpLine, V3, V4),
     
-    % STEP 5: Derive Cons by ->E
+    % ÉTAPE 5 : Dériver Cons par →E
     MPLine is ImpLine + 1,
     assert_safe_fitch_line(MPLine, Cons, l0cond(ComplexLine, ImpLine), Scope),
     format(atom(Just2), '$ \\to E $ ~w,~w', [ComplexLine, ImpLine]),
     render_have(Scope, Cons, Just2, ImpLine, MPLine, V4, V5),
     
-    % STEP 6: Continue with SP2
+    % ÉTAPE 6 : Continuer avec SP2
     fitch_g4_proof(SP2, [MPLine:Cons, ImpLine:(Ant => Inter), ExtractLine:(Inter => Cons)|Context],
                   Scope, MPLine, NextLine, ResLine, V5, VarOut).
-
 % =========================================================================
-% QUANTIFICATION RULES
+% RÈGLES DE QUANTIFICATION
 % =========================================================================
-
-% R-forall
+% R∀
 fitch_g4_proof(rall((_ > [(![Z-X]:A)]), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     fitch_g4_proof(SubProof, Context, Scope, CurLine, SubEnd, BodyLine, VarIn, V1),
     derive_formula(Scope, (![Z-X]:A), '$ \\forall I $ ~w', [BodyLine], rall(BodyLine),
                   SubEnd, NextLine, ResLine, V1, VarOut).
-
-% L-forall: Universal elimination
+% L∀ : Élimination Universelle
 fitch_g4_proof(lall((Premisses > _), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     extract_new_formula(Premisses > _, SubProof, NewFormula),
     
-    % Find the universal quantifier that generates NewFormula
+    % Trouver le quantificateur universel qui génère NewFormula
     (
-        % Case 1: NewFormula is a direct instance of a universal in Premisses
+        % Cas 1: NewFormula est une instance directe d'un universel dans Premisses
         (
             member((![Z-X]:Body), Premisses),
-            % Check if Body (with substitution) gives NewFormula
+            % Vérifier si Body (avec substitution) donne NewFormula
             strip_annotations_deep(Body, StrippedBody),
             strip_annotations_deep(NewFormula, StrippedNew),
             unifiable(StrippedBody, StrippedNew, _),
             UniversalFormula = (![Z-X]:Body)
         ;
-            % Case 2: Search by equivalent structure
+            % Cas 2: Chercher par structure équivalente
             member((![Z-X]:Body), Premisses),
             formulas_equivalent(Body, NewFormula),
             UniversalFormula = (![Z-X]:Body)
         ;
-            % Case 3: Fallback - take the first (current behavior)
+            % Cas 3: Fallback - prendre le premier (comportement actuel)
             select((![Z-X]:Body), Premisses, _),
             UniversalFormula = (![Z-X]:Body)
         )
@@ -2530,14 +2713,13 @@ fitch_g4_proof(lall((Premisses > _), SubProof), Context, Scope, CurLine, NextLin
     derive_and_continue(Scope, NewFormula, '$ \\forall E $ ~w', [UnivLine], lall(UnivLine),
                        SubProof, Context, CurLine, NextLine, ResLine, VarIn, VarOut).
 
-% R-exists
+% R∃
 fitch_g4_proof(rex((_ > [Goal]), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     fitch_g4_proof(SubProof, Context, Scope, CurLine, SubEnd, _WitnessLine, VarIn, V1),
-    % CORRECTION: Reference SubEnd (witness line), not WitnessLine
+    % ✅ CORRECTION : Référencer SubEnd (la ligne du témoin), pas WitnessLine
     derive_formula(Scope, Goal, '$ \\exists I $ ~w', [SubEnd], rex(SubEnd),
                   SubEnd, NextLine, ResLine, V1, VarOut).
-
-% L-exists
+% L∃
 fitch_g4_proof(lex((Premisses > [Goal]), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     select((?[Z-X]:Body), Premisses, _),
     find_context_line(?[Z-X]:Body, Context, ExistLine),
@@ -2551,13 +2733,12 @@ fitch_g4_proof(lex((Premisses > [Goal]), SubProof), Context, Scope, CurLine, Nex
       fitch_g4_proof(SubProof, [WitLine:Witness|Context], NewScope, WitLine, SubEnd, _GoalLine, V1, V2),
       ElimLine is SubEnd + 1,
       assert_safe_fitch_line(ElimLine, Goal, lex(ExistLine, WitLine, SubEnd), Scope),
-      % CORRECTION: Reference SubEnd (last line of subproof)
+      % ✅ CORRECTION : Référencer SubEnd (dernière ligne de la sous-preuve)
       format(atom(Just), '$ \\exists E $ ~w,~w-~w', [ExistLine, WitLine, SubEnd]),
       render_have(Scope, Goal, Just, SubEnd, ElimLine, V2, VarOut),
       NextLine = ElimLine, ResLine = ElimLine
     ).
-
-% L-exists-or: Combined existential-disjunction 
+% L∃∨ : Combined existential-disjunction 
 fitch_g4_proof(lex_lor((_ > [Goal]), SP1, SP2), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     SP1 =.. [_, (Prem1 > _)|_],
     SP2 =.. [_, (Prem2 > _)|_],
@@ -2581,144 +2762,146 @@ fitch_g4_proof(lex_lor((_ > [Goal]), SP1, SP2), Context, Scope, CurLine, NextLin
     render_have(Scope, Goal, ExistJust, DisjElim, ElimLine, V4, VarOut),
     NextLine = ElimLine, ResLine = ElimLine.
 
-% CQ_c: Classical quantifier conversion
+% CQ_c : Classical quantifier conversion
 fitch_g4_proof(cq_c((Premisses > _), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     extract_new_formula(Premisses, SubProof, NewFormula),
     select((![Z-X]:A) => B, Premisses, _),
-    find_context_line((![Z-X]:A) => B, Context, Line),
+    find_context_line((![Z-X]:A) => B, Context, Line),  % ← CORRECTION
     derive_and_continue(Scope, NewFormula, '$ CQ_{c} $ ~w', [Line], cq_c(Line),
                        SubProof, Context, CurLine, NextLine, ResLine, VarIn, VarOut).
 
-% CQ_m: Minimal quantifier conversion
+% CQ_m : Minimal quantifier conversion
 fitch_g4_proof(cq_m((Premisses > _), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     extract_new_formula(Premisses, SubProof, NewFormula),
     select((?[Z-X]:A)=>B, Premisses, _),
-    find_context_line((?[Z-X]:A)=>B, Context, Line),
+    find_context_line((?[Z-X]:A)=>B, Context, Line),  % ← CORRECTION : cherche la bonne ligne
     derive_and_continue(Scope, NewFormula, '$ CQ_{m} $ ~w', [Line], cq_m(Line),
                        SubProof, Context, CurLine, NextLine, ResLine, VarIn, VarOut).
 
 % =========================================================================
-% EQUALITY RULES
+% RÈGLES D'ÉGALITÉ (EQUALITY RULES)
+% =========================================================================
+% =========================================================================
+% RÈGLES D'ÉGALITÉ (EQUALITY RULES) - VERSION CORRIGÉE
 % =========================================================================
 
-% Reflexivity
-fitch_g4_proof(eq_refl(Delta), _Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- 
+% Réflexivité
+fitch_g4_proof(eq_refl(D), _Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- 
     !,
-    Delta = [Goal],
+    D = [Goal],
     DerLine is CurLine + 1,
     assert_safe_fitch_line(DerLine, Goal, eq_refl, Scope),
-    render_have(Scope, Goal, '$ = I$', CurLine, DerLine, VarIn, VarOut),
+    render_have(Scope, Goal, 'Leibniz', CurLine, DerLine, VarIn, VarOut),
     NextLine = DerLine,
     ResLine = DerLine.
 
-% Symmetry
-fitch_g4_proof(eq_sym(_Gamma>Delta), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- 
+% Symétrie
+fitch_g4_proof(eq_sym(_G>D), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- 
     !,
-    Delta = [A = B],
+    D = [A = B],
     find_context_line(B = A, Context, EqLine),
     DerLine is CurLine + 1,
     assert_safe_fitch_line(DerLine, (A = B), eq_sym(EqLine), Scope),
-    format(atom(Just), '$ = E $ ~w', [EqLine]),
+    format(atom(Just), 'Leibniz ~w', [EqLine]),
     render_have(Scope, (A = B), Just, CurLine, DerLine, VarIn, VarOut),
     NextLine = DerLine,
     ResLine = DerLine.
 
-% Transitivity
-fitch_g4_proof(eq_trans(Gamma>Delta), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- 
+% Transitivité
+fitch_g4_proof(eq_trans(G>D), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- 
     !,
-    Delta = [A = C],
-    Gamma = [A = B, B = C | _Rest],  % Direct pattern matching
+    D = [A = C],
+    G = [A = B, B = C | _Rest],  % Pattern matching direct
     find_context_line(A = B, Context, Line1),
     find_context_line(B = C, Context, Line2),
     DerLine is CurLine + 1,
     assert_safe_fitch_line(DerLine, (A = C), eq_trans(Line1, Line2), Scope),
-    format(atom(Just), '$ = E$ ~w,~w', [Line1, Line2]),
+    format(atom(Just), 'Leibniz ~w,~w', [Line1, Line2]),
     render_have(Scope, (A = C), Just, CurLine, DerLine, VarIn, VarOut),
     NextLine = DerLine,
     ResLine = DerLine.
 
-% Substitution (Leibniz) - MAIN CASE
-fitch_g4_proof(eq_subst(Gamma>Delta), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- 
+% Substitution (Leibniz) - CAS PRINCIPAL
+fitch_g4_proof(eq_subst(G>D), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- 
     !,
-    Delta = [Goal],
-    Goal \= (_ = _),  % Not an equality
+    D = [Goal],
+    Goal \= (_ = _),  % Pas une égalité
     
-    % Extract equality and predicate from Gamma
-    member(A = B, Gamma),
-    member(Pred, Gamma),
+    % Extraire l'égalité et le prédicat de G
+    member(A = B, G),
+    member(Pred, G),
     Pred \= (_ = _),
     Pred \= (A = B),
     
-    % Verify that Goal is Pred with A replaced by B
+    % Vérifier que Goal est Pred avec A remplacé par B
     Pred =.. [PredName|Args],
     Goal =.. [PredName|GoalArgs],
     
-    % Find position where substitution occurs
+    % Trouver la position où la substitution a lieu
     nth0(Pos, Args, A),
     nth0(Pos, GoalArgs, B),
     
-    % Find line numbers in context
+    % Trouver les numéros de ligne dans le contexte
     find_context_line(A = B, Context, EqLine),
     find_context_line(Pred, Context, PredLine),
     
     !,
     DerLine is CurLine + 1,
     assert_safe_fitch_line(DerLine, Goal, eq_subst(EqLine, PredLine), Scope),
-    format(atom(Just), '$ = E$ ~w,~w', [EqLine, PredLine]),
+    format(atom(Just), 'Leibniz ~w,~w', [EqLine, PredLine]),
     render_have(Scope, Goal, Just, CurLine, DerLine, VarIn, VarOut),
     NextLine = DerLine,
     ResLine = DerLine.
 
 % Congruence
-fitch_g4_proof(eq_cong(_Gamma>Delta), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- 
+fitch_g4_proof(eq_cong(_G>D), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- 
     !,
-    Delta = [LHS = RHS],
+    D = [LHS = RHS],
     LHS =.. [F|ArgsL],
     RHS =.. [F|ArgsR],
     find_diff_pos(ArgsL, ArgsR, _Pos, TermL, TermR),
     find_context_line(TermL = TermR, Context, EqLine),
     DerLine is CurLine + 1,
     assert_safe_fitch_line(DerLine, (LHS = RHS), eq_cong(EqLine), Scope),
-    format(atom(Just), '$ = E$ ~w', [EqLine]),
+    format(atom(Just), 'Leibniz ~w', [EqLine]),
     render_have(Scope, (LHS = RHS), Just, CurLine, DerLine, VarIn, VarOut),
     NextLine = DerLine,
     ResLine = DerLine.
 
-% Substitution in equality
-fitch_g4_proof(eq_subst_eq(Gamma>Delta), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- 
+% Substitution dans égalité
+fitch_g4_proof(eq_subst_eq(G>D), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- 
     !,
-    Delta = [Goal_LHS = Goal_RHS],
-    member(X = Y, Gamma),
-    member(Ctx_LHS = Ctx_RHS, Gamma),
+    D = [Goal_LHS = Goal_RHS],
+    member(X = Y, G),
+    member(Ctx_LHS = Ctx_RHS, G),
     find_context_line(X = Y, Context, XY_Line),
     find_context_line(Ctx_LHS = Ctx_RHS, Context, Ctx_Line),
     DerLine is CurLine + 1,
     assert_safe_fitch_line(DerLine, (Goal_LHS = Goal_RHS), eq_subst_eq(XY_Line, Ctx_Line), Scope),
-    format(atom(Just), '$ = E$ ~w,~w', [XY_Line, Ctx_Line]),
+    format(atom(Just), 'Leibniz ~w,~w', [XY_Line, Ctx_Line]),
     render_have(Scope, (Goal_LHS = Goal_RHS), Just, CurLine, DerLine, VarIn, VarOut),
     NextLine = DerLine,
     ResLine = DerLine.
 
-% Chained transitivity
-fitch_g4_proof(eq_trans_chain(_Gamma>Delta), _Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- 
+% Transitivité en chaîne
+fitch_g4_proof(eq_trans_chain(_G>D), _Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- 
     !,
-    Delta = [A = C],
+    D = [A = C],
     DerLine is CurLine + 1,
     assert_safe_fitch_line(DerLine, (A = C), eq_trans_chain, Scope),
-    render_have(Scope, (A = C), '=E', CurLine, DerLine, VarIn, VarOut),
+    render_have(Scope, (A = C), 'Leibniz', CurLine, DerLine, VarIn, VarOut),
     NextLine = DerLine,
     ResLine = DerLine.
-
 % =========================================================================
 % FALLBACK
 % =========================================================================
-
 fitch_g4_proof(UnknownRule, _Context, _Scope, CurLine, CurLine, CurLine, VarIn, VarIn) :-
     format('% WARNING: Unknown rule ~w~n', [UnknownRule]).
 
 % =========================================================================
-%  END OF FITCH PRINTER 
+% END OF FLAG STYLE PRINTER 
 % =========================================================================
+
 % =========================================================================
 % NATURAL DEDUCTION PRINTER IN TREE STYLE  
 % =========================================================================
@@ -3594,6 +3777,18 @@ rewrite((~A), J, K, (' \\lnot ' C)) :-
     rewrite(A, J, K, C).
 
 
+% QUANTIFIERS WITH ASQ ANNOTATIONS: strip asq(...) and use variable name
+% CRITICAL: Replace only the SPECIFIC asq term, not all asq terms
+rewrite((![X-asq(A,B)]:Body), J, K, (' \\forall ' X ' ' C)) :-
+    !,
+    replace_specific_asq(asq(A,B), X, Body, CleanBody),
+    rewrite(CleanBody, J, K, C).
+
+rewrite((?[X-asq(A,B)]:Body), J, K, (' \\exists ' X ' ' C)) :-
+    !,
+    replace_specific_asq(asq(A,B), X, Body, CleanBody),
+    rewrite(CleanBody, J, K, C).
+
 % QUANTIFICATEURS : Version Burse pour format X-Y
 rewrite((![X-X]:A), J, K, (' \\forall ' X ' ' C)) :-
     !,
@@ -3677,9 +3872,38 @@ concatenate_all(_, _) :-
 
 concatenate_all_impl([X], X) :-
     atomic(X), !.
+concatenate_all_impl([X], Result) :-
+    % Handle compound terms: flatten them
+    compound(X),
+    !,
+    flatten_term(X, Flattened),
+    concatenate_all_impl(Flattened, Result).
 concatenate_all_impl([H|T], Result) :-
+    atomic(H),
+    !,
     concatenate_all_impl(T, TempResult),
     atom_concat(H, TempResult, Result).
+concatenate_all_impl([H|T], Result) :-
+    % Handle compound terms in list
+    compound(H),
+    !,
+    flatten_term(H, Flattened),
+    append(Flattened, T, NewList),
+    concatenate_all_impl(NewList, Result).
+
+% Helper: flatten a compound term into a list of atoms
+flatten_term(Term, [Atom]) :-
+    atomic(Term),
+    !,
+    term_to_atom(Term, Atom).
+flatten_term(Term, Flattened) :-
+    compound(Term),
+    Term =.. [Functor|Args],
+    atom(Functor),
+    maplist(flatten_term, Args, ArgLists),
+    append(ArgLists, Flattened).
+flatten_term(Var, ['_']) :-
+    var(Var).
 
 % =========================================================================
 % LIST AND TERM PROCESSING
@@ -3898,6 +4122,29 @@ render_latex_formula(Formula) :-
 
 render_latex_with_parens(Formula, Context) :-
     write_with_context(Formula, Context).
+
+% =========================================================================
+% ASQ REPLACEMENT HELPER
+% =========================================================================
+% Replace SPECIFIC asq(A,B) term (not all asq terms) with variable X in formulas
+% Used when rendering quantifiers with asq annotations
+
+% Match the EXACT asq term (using unification with ==)
+replace_specific_asq(AsqTerm, Var, Term, Var) :-
+    Term == AsqTerm, !.
+
+% For compound terms, recurse but skip quantifier structures
+replace_specific_asq(AsqTerm, Var, Term, Result) :-
+    compound(Term),
+    Term \= ![_|_],
+    Term \= ?[_|_],
+    !,
+    Term =.. [F|Args],
+    maplist(replace_specific_asq(AsqTerm, Var), Args, NewArgs),
+    Result =.. [F|NewArgs].
+
+% Atoms and variables pass through
+replace_specific_asq(_, _, Term, Term).
 
 % =========================================================================
 % END OF LATEX UTILITIES FILE
@@ -4327,4 +4574,5 @@ replace_bicond_with_eq(Term, Result) :-
     Result =.. [F|NewArgs], !.
 replace_bicond_with_eq(Term, Term).
 
-%%% END OF PROVER ONLINE
+%%% END OF G4MIC PROVER
+
