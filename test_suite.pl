@@ -425,8 +425,11 @@ test_Lepage :-
         write( '36. Lepage, Elements de logique contemporaine, p. 202, ex. 14*-g'), nl,
         prove((![x]:(f(x) <=> g(x)) & ![x]:(h(x) <=> i(x)) & ?[x]:(i(x) & ![y]:(f(y) => j(y)))) => ?[x]:(h(x) & ![y]:(j(y) | ~ g(y)))).
 test_Bostock :-
-      write('36-bis Bostock, Intermediate Logic, p. 279'), nl,
-      prove(![x]:(?[y]:(f(x) & g(y))) => ?[y]:(![x]:(f(x) & g(y)))).
+    write( '36-bis. Bostock, Intermediate Logic - Oxford , p. 279'), nl,
+    prove(![x]:(?[y]:(f(x) & g(y))) => ?[y]:(![x]:(f(x) & g(y)))).
+test_Pelletier_09 :-
+    write( '36-ter. Pelletier 09 - counter-model '), nl,
+    prove(![x]:(?[y]:f(x,y)) => ?[y]:(![x]:f(x,y))).
 test_fol_instantiation :-
     write('37.'), nl,
     prove(![x]:p(x) => ?[x]:p(x)), nl.
@@ -434,7 +437,7 @@ test_fol_quantifiers_permutation :-
     write('38.'), nl,
     prove((?[y]:(![x]:(f(x,y)))) => (![x]:(?[y]:(f(x,y))))), nl.
 test_russell_paradox :-
-    write('38. Russell'), nl,
+    write('38. Russell Paradox '), nl,
     prove((?[y]:(![x]:(~ b(x,x) <=> b(x,y)))) => #), nl.
 % =================================================================
 % 5. PREMISE TESTS - PRACTICAL REASONING
@@ -503,6 +506,7 @@ run_all_tests :-
     test_dn_Dummett,nl,
     test_dn_classical_contraposition,nl,
 
+
     % Classical tests
     write('=== CLASSICAL LOGIC ==='), nl,
     test_indirect_proof, nl,
@@ -522,6 +526,7 @@ run_all_tests :-
     test_Spinoza,nl,
     test_Lepage,nl,
     test_Bostock,nl,
+    test_Pelletier_09,nl,
     test_fol_instantiation,nl,
     test_fol_quantifiers_permutation,nl,
     test_russell_paradox,nl,
@@ -943,23 +948,17 @@ test_seq_spinoza :-
     ] > [![x]: ~ c(x)]).
 
 test_seq_lepage :-
-    write('104. Lepage'), nl,
+    write('104. Lepage - intutionistic version '), nl,
     prove([
         ![x]:(f(x) <=> g(x)),
         ![x]:(h(x) <=> i(x)),
         ?[x]:(i(x) & ![y]:(f(y) => j(y)))
-    ] > [?[x]:(h(x) & ![y]:(j(y) | ~ g(y)))]).
+             ] > [?[x]:(h(x) & ![y]:(g(y) => j(y)))]).
 
 test_seq_bostock :-
-    write('104-bis. Bostock, p. 258'), nl,
-    prove([
-           ![x]:(?[y]:(f(x) & g(y)))
-             ]
-         >
-         [
-             ?[y]:(![x]:(f(x) & g(y)))
-         ]
-         ).
+    write('p. 258. Bostock  sequent version'),nl,
+    prove([![x]:(?[y]:(f(x) & g(y)))] > [?[y]:(![x]:(f(x) & g(y)))]).
+
 % =================================================================
 % BICONDITIONAL SEQUENTS
 % =================================================================
@@ -976,31 +975,17 @@ test_seq_bicond_quantifier :-
     write('107.'), nl,
     prove([![x]:(p(x) <=> q(x)), p(a)] > [q(a)]).
 
-test_antisequent_one :-
-    write('109.'), nl,
-    prove(f(a) => (![x]:f(x))).
-
-test_antisequent_two :-
-    write('110.'), nl,
-    prove((a | b) => (a & b)).
-
-
-test_antisequent_three :-
-    write('111. Pelletier 09.'), nl,
-    prove((![x]:(?[y]:r(x,y))) => (?[y]:(![x]:r(x,y)))).
-
-% =================================================================
-
 % =================================================================
 % TEST RUNNERS
 % =================================================================
 
 run_fol_seq :-
-    retractall(fitch_line(_, _, _, _)),      % <- Nettoyage global
+        retractall(fitch_line(_, _, _, _)),      % <- Nettoyage global
     retractall(abbreviated_line(_)),
     write('========================================'), nl,
     write('FOL SEQUENT TEST SUITE START'), nl,
     write('========================================'), nl, nl,
+
     write('=== BASIC QUANTIFIERS ==='), nl,
     test_seq_exists_intro, nl,
     test_seq_exists_elim, nl,
@@ -1037,7 +1022,7 @@ run_fol_seq :-
     write('=== COMPLEX FOL ==='), nl,
     test_seq_spinoza, nl,
     test_seq_lepage, nl,
-    test_seq_bostock,nl,
+    test_seq_bostock, nl,
 
     write('=== BICONDITIONALS ==='), nl,
     test_seq_bicond_left, nl,
@@ -1046,17 +1031,7 @@ run_fol_seq :-
 
     write('========================================'), nl,
     write('FOL SEQUENT TEST SUITE END'), nl,
-    write('========================================'), nl,
-
-   write('========================================'), nl,
-   write('  ANTISEQUENTS TESTS SUITE START'), nl,
-   write('========================================'), nl,
-   test_antisequent_one,nl,
-   test_antisequent_two,nl,
-   test_antisequent_three,nl,
-   write('========================================'), nl,
-   write('  ANTISEQUENTS TESTS SUITE END'), nl,
-   write('========================================'), nl,
+    write('========================================'), nl.
 
 run_quick_fol_sequent_tests :-
     write('=== QUICK FOL SEQUENT TESTS ==='), nl,
