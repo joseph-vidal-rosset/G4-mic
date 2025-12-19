@@ -315,163 +315,184 @@ prove(G > D) :-
 % =========================================================================
 
 prove(Left <=> Right) :- !,
-    validate_and_warn(Left, _),
-    validate_and_warn(Right, _),
-
-    % Test direction 1
-    retractall(current_proof_sequent(_)),
-    assertz(current_proof_sequent(Left => Right)),
-    ( catch(time((decide_silent(Left => Right, Proof1, Logic1))), _, fail) ->
-        Direction1Valid = true,
-        (is_antisequent_proof(Proof1) -> IsRefutation1 = true ; IsRefutation1 = false)
+    % Check if user meant sequent equivalence (<>) instead of biconditional (<=>)
+    ( (is_list(Left) ; is_list(Right)) ->
+        nl,
+        write('╔═══════════════════════════════════════════════════════════════╗'), nl,
+        write('║  ⚠️  SYNTAX ERROR: <=> used with sequents                     ║'), nl,
+        write('╚═══════════════════════════════════════════════════════════════╝'), nl,
+        nl,
+        write('You wrote: prove('), write(Left <=> Right), write(')'), nl,
+        nl,
+        write('❌ WRONG:  <=>  is for biconditionals between FORMULAS'), nl,
+        write('   Example: prove(p <=> q)'), nl,
+        nl,
+        write('✅ CORRECT: <>  is for equivalence between SEQUENTS'), nl,
+        write('   Example: decide([p] <> [q])'), nl,
+        nl,
+        write('Note: For sequent equivalence, use decide/1, not prove/1'), nl,
+        nl,
+        fail
     ;
-        Direction1Valid = false, Proof1 = none, Logic1 = none, IsRefutation1 = false
-    ),
+        % Normal biconditional processing
+        validate_and_warn(Left, _),
+        validate_and_warn(Right, _),
 
-    % Test direction 2
-    retractall(current_proof_sequent(_)),
-    assertz(current_proof_sequent(Right => Left)),
-    ( catch(time((decide_silent(Right => Left, Proof2, Logic2))), _, fail) ->
-        Direction2Valid = true,
-        (is_antisequent_proof(Proof2) -> IsRefutation2 = true ; IsRefutation2 = false)
-    ;
-        Direction2Valid = false, Proof2 = none, Logic2 = none, IsRefutation2 = false
-    ),
-
-    nl,
-    write('╔══════════════════════════════════════════════════════════════╗'), nl,
-    write('           ↔️  BICONDITIONAL: Proving Both Directions           '), nl,
-    write('╚══════════════════════════════════════════════════════════════╝'), nl, nl,
-
-    % ═══════════════════════════════════════════════════════════════
-    % SEQUENT CALCULUS (both directions)
-    % ═══════════════════════════════════════════════════════════════
-    write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl,
-    write('📐 Sequent Calculus Proofs'), nl,
-    write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl, nl,
-
-    % Direction 1 - Sequent
-    write('┌──────────────────────────────────────────────────────────────┐'), nl,
-    write('                ➡️   DIRECTION 1                                '), nl,
-    write('           '), write(Left => Right), nl,
-    write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
-    ( Direction1Valid = true ->
-        ( IsRefutation1 = true ->
-            write('❌ REFUTED (counter-model found)'), nl, nl
+        % Test direction 1
+        retractall(current_proof_sequent(_)),
+        assertz(current_proof_sequent(Left => Right)),
+        ( catch(time((decide_silent(Left => Right, Proof1, Logic1))), _, fail) ->
+            Direction1Valid = true,
+            (is_antisequent_proof(Proof1) -> IsRefutation1 = true ; IsRefutation1 = false)
         ;
-            output_logic_label(Logic1), nl, nl
+            Direction1Valid = false, Proof1 = none, Logic1 = none, IsRefutation1 = false
         ),
-        write('\\begin{prooftree}'), nl,
-        render_bussproofs(Proof1, 0, _),
-        write('\\end{prooftree}'), nl, nl,
-        write('✅ Q.E.D.'), nl, nl
-    ; write('⚠️  FAILED TO PROVE OR REFUTE'), nl, nl
-    ),
 
-    % Direction 2 - Sequent
-    write('┌──────────────────────────────────────────────────────────────┐'), nl,
-    write('                    ⬅️   DIRECTION 2                            '), nl,
-    write('               '), write(Right => Left), nl,
-    write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
-    ( Direction2Valid = true ->
-        ( IsRefutation2 = true ->
-            write('❌ REFUTED (counter-model found)'), nl, nl
+        % Test direction 2
+        retractall(current_proof_sequent(_)),
+        assertz(current_proof_sequent(Right => Left)),
+        ( catch(time((decide_silent(Right => Left, Proof2, Logic2))), _, fail) ->
+            Direction2Valid = true,
+            (is_antisequent_proof(Proof2) -> IsRefutation2 = true ; IsRefutation2 = false)
         ;
-            output_logic_label(Logic2), nl, nl
+            Direction2Valid = false, Proof2 = none, Logic2 = none, IsRefutation2 = false
         ),
-        write('\\begin{prooftree}'), nl,
-        render_bussproofs(Proof2, 0, _),
-        write('\\end{prooftree}'), nl, nl,
-        write('✅ Q.E.D.'), nl, nl
-    ; write('⚠️  FAILED TO PROVE OR REFUTE'), nl, nl
-    ),
 
-    % ═══════════════════════════════════════════════════════════════
-    % NATURAL DEDUCTION - TREE STYLE (both directions)
-    % ═══════════════════════════════════════════════════════════════
-    write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl,
-    write('🌳 Natural Deduction - Tree Style'), nl,
-    write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl, nl,
+        nl,
+        write('╔══════════════════════════════════════════════════════════════╗'), nl,
+        write('           ↔️  BICONDITIONAL: Proving Both Directions           '), nl,
+        write('╚══════════════════════════════════════════════════════════════╝'), nl, nl,
 
-    % Direction 1 - ND Tree
-    write('┌──────────────────────────────────────────────────────────────┐'), nl,
-    write('                     ➡️   DIRECTION 1                            '), nl,
-    write('                '), write(Left => Right), nl,
-    write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
-    ( Direction1Valid = true, IsRefutation1 = false ->
-        render_nd_tree_proof(Proof1), nl, nl,
-        write('✅ Q.E.D.'), nl, nl
-    ; Direction1Valid = true, IsRefutation1 = true ->
-        write('(Refutation - no ND proof)'), nl, nl
-    ; write('⚠️  FAILED TO PROVE'), nl, nl
-    ),
+        % ═══════════════════════════════════════════════════════════════
+        % SEQUENT CALCULUS (both directions)
+        % ═══════════════════════════════════════════════════════════════
+        write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl,
+        write('📐 Sequent Calculus Proofs'), nl,
+        write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl, nl,
 
-    % Direction 2 - ND Tree
-    write('┌──────────────────────────────────────────────────────────────┐'), nl,
-    write('                   ⬅️   DIRECTION 2                              '), nl,
-    write('                 '), write(Right => Left), nl,
-    write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
-    ( Direction2Valid = true, IsRefutation2 = false ->
-        render_nd_tree_proof(Proof2), nl, nl,
-        write('✅ Q.E.D.'), nl, nl
-    ; Direction2Valid = true, IsRefutation2 = true ->
-        write('(Refutation - no ND proof)'), nl, nl
-    ; write('⚠️  FAILED TO PROVE'), nl, nl
-    ),
+        % Direction 1 - Sequent
+        write('┌──────────────────────────────────────────────────────────────┐'), nl,
+        write('                ➡️   DIRECTION 1                                '), nl,
+        write('           '), write(Left => Right), nl,
+        write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
+        ( Direction1Valid = true ->
+            ( IsRefutation1 = true ->
+                write('❌ REFUTED (counter-model found)'), nl, nl
+            ;
+                output_logic_label(Logic1), nl, nl
+            ),
+            write('\\begin{prooftree}'), nl,
+            render_bussproofs(Proof1, 0, _),
+            write('\\end{prooftree}'), nl, nl,
+            write('✅ Q.E.D.'), nl, nl
+        ; write('⚠️  FAILED TO PROVE OR REFUTE'), nl, nl
+        ),
 
-    % ═══════════════════════════════════════════════════════════════
-    % NATURAL DEDUCTION - FITCH STYLE (both directions)
-    % ═══════════════════════════════════════════════════════════════
-    write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl,
-    write('🚩 Natural Deduction - Flag Style'), nl,
-    write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl, nl,
+        % Direction 2 - Sequent
+        write('┌──────────────────────────────────────────────────────────────┐'), nl,
+        write('                    ⬅️   DIRECTION 2                            '), nl,
+        write('               '), write(Right => Left), nl,
+        write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
+        ( Direction2Valid = true ->
+            ( IsRefutation2 = true ->
+                write('❌ REFUTED (counter-model found)'), nl, nl
+            ;
+                output_logic_label(Logic2), nl, nl
+            ),
+            write('\\begin{prooftree}'), nl,
+            render_bussproofs(Proof2, 0, _),
+            write('\\end{prooftree}'), nl, nl,
+            write('✅ Q.E.D.'), nl, nl
+        ; write('⚠️  FAILED TO PROVE OR REFUTE'), nl, nl
+        ),
 
-    % Direction 1 - Fitch
-    write('┌──────────────────────────────────────────────────────────────┐'), nl,
-    write('                     ➡️   DIRECTION 1                           '), nl,
-    write('                '), write(Left => Right), nl,
-    write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
-    ( Direction1Valid = true, IsRefutation1 = false ->
-        write('\\begin{fitch}'), nl,
-        g4_to_fitch_theorem(Proof1),
-        write('\\end{fitch}'), nl, nl,
-        write('✅ Q.E.D.'), nl, nl
-    ; Direction1Valid = true, IsRefutation1 = true ->
-        write('(Refutation - no ND proof)'), nl, nl
-    ; write('⚠️  FAILED TO PROVE'), nl, nl
-    ),
+        % ═══════════════════════════════════════════════════════════════
+        % NATURAL DEDUCTION - TREE STYLE (both directions)
+        % ═══════════════════════════════════════════════════════════════
+        write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl,
+        write('🌳 Natural Deduction - Tree Style'), nl,
+        write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl, nl,
 
-    % Direction 2 - Fitch
-    write('┌──────────────────────────────────────────────────────────────┐'), nl,
-    write('              ⬅️   DIRECTION 2                                   '), nl,
-    write('             '), write(Right => Left), nl,
-    write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
-    ( Direction2Valid = true, IsRefutation2 = false ->
-        write('\\begin{fitch}'), nl,
-        g4_to_fitch_theorem(Proof2),
-        write('\\end{fitch}'), nl, nl,
-        write('✅ Q.E.D.'), nl, nl
-    ; Direction2Valid = true, IsRefutation2 = true ->
-        write('(Refutation - no ND proof)'), nl, nl
-    ; write('⚠️  FAILED TO PROVE'), nl, nl
-    ),
+        % Direction 1 - ND Tree
+        write('┌──────────────────────────────────────────────────────────────┐'), nl,
+        write('                     ➡️   DIRECTION 1                            '), nl,
+        write('                '), write(Left => Right), nl,
+        write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
+        ( Direction1Valid = true, IsRefutation1 = false ->
+            render_nd_tree_proof(Proof1), nl, nl,
+            write('✅ Q.E.D.'), nl, nl
+        ; Direction1Valid = true, IsRefutation1 = true ->
+            write('(Refutation - no ND proof)'), nl, nl
+        ; write('⚠️  FAILED TO PROVE'), nl, nl
+        ),
 
-    % ═══════════════════════════════════════════════════════════════
-    % SUMMARY
-    % ═══════════════════════════════════════════════════════════════
-    write('╔══════════════════════════════════════════════════════════════╗'), nl,
-    write('                          📊 SUMMARY                             '), nl,
-    write('╚══════════════════════════════════════════════════════════════╝'), nl,
-    write('Direction 1 ('), write(Left => Right), write('): '),
-    ( Direction1Valid = true ->
-        ( IsRefutation1 = true -> write('❌ INVALID (refuted)') ; write('✅ VALID in '), write(Logic1), write(' logic') )
-    ; write('⚠️  FAILED')
-    ), nl,
-    write('Direction 2 ('), write(Right => Left), write('): '),
-    ( Direction2Valid = true ->
-        ( IsRefutation2 = true -> write('❌ INVALID (refuted)') ; write('✅ VALID in '), write(Logic2), write(' logic') )
-    ; write('⚠️  FAILED')
-    ), nl, nl, !.
+        % Direction 2 - ND Tree
+        write('┌──────────────────────────────────────────────────────────────┐'), nl,
+        write('                   ⬅️   DIRECTION 2                              '), nl,
+        write('                 '), write(Right => Left), nl,
+        write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
+        ( Direction2Valid = true, IsRefutation2 = false ->
+            render_nd_tree_proof(Proof2), nl, nl,
+            write('✅ Q.E.D.'), nl, nl
+        ; Direction2Valid = true, IsRefutation2 = true ->
+            write('(Refutation - no ND proof)'), nl, nl
+        ; write('⚠️  FAILED TO PROVE'), nl, nl
+        ),
+
+        % ═══════════════════════════════════════════════════════════════
+        % NATURAL DEDUCTION - FITCH STYLE (both directions)
+        % ═══════════════════════════════════════════════════════════════
+        write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl,
+        write('🚩 Natural Deduction - Flag Style'), nl,
+        write('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'), nl, nl,
+
+        % Direction 1 - Fitch
+        write('┌──────────────────────────────────────────────────────────────┐'), nl,
+        write('                     ➡️   DIRECTION 1                           '), nl,
+        write('                '), write(Left => Right), nl,
+        write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
+        ( Direction1Valid = true, IsRefutation1 = false ->
+            write('\\begin{fitch}'), nl,
+            g4_to_fitch_theorem(Proof1),
+            write('\\end{fitch}'), nl, nl,
+            write('✅ Q.E.D.'), nl, nl
+        ; Direction1Valid = true, IsRefutation1 = true ->
+            write('(Refutation - no ND proof)'), nl, nl
+        ; write('⚠️  FAILED TO PROVE'), nl, nl
+        ),
+
+        % Direction 2 - Fitch
+        write('┌──────────────────────────────────────────────────────────────┐'), nl,
+        write('              ⬅️   DIRECTION 2                                   '), nl,
+        write('             '), write(Right => Left), nl,
+        write('└──────────────────────────────────────────────────────────────┘'), nl, nl,
+        ( Direction2Valid = true, IsRefutation2 = false ->
+            write('\\begin{fitch}'), nl,
+            g4_to_fitch_theorem(Proof2),
+            write('\\end{fitch}'), nl, nl,
+            write('✅ Q.E.D.'), nl, nl
+        ; Direction2Valid = true, IsRefutation2 = true ->
+            write('(Refutation - no ND proof)'), nl, nl
+        ; write('⚠️  FAILED TO PROVE'), nl, nl
+        ),
+
+        % ═══════════════════════════════════════════════════════════════
+        % SUMMARY
+        % ═══════════════════════════════════════════════════════════════
+        write('╔══════════════════════════════════════════════════════════════╗'), nl,
+        write('                          📊 SUMMARY                             '), nl,
+        write('╚══════════════════════════════════════════════════════════════╝'), nl,
+        write('Direction 1 ('), write(Left => Right), write('): '),
+        ( Direction1Valid = true ->
+            ( IsRefutation1 = true -> write('❌ INVALID (refuted)') ; write('✅ VALID in '), write(Logic1), write(' logic') )
+        ; write('⚠️  FAILED')
+        ), nl,
+        write('Direction 2 ('), write(Right => Left), write('): '),
+        ( Direction2Valid = true ->
+            ( IsRefutation2 = true -> write('❌ INVALID (refuted)') ; write('✅ VALID in '), write(Logic2), write(' logic') )
+        ; write('⚠️  FAILED')
+        ), nl, nl, !
+    ).
 
 % =========================================================================
 % SEQUENT EQUIVALENCE (<>) - Complete corrected section (grouped by style)
@@ -1929,7 +1950,8 @@ render_bussproofs(equiv_subst(Seq), VarCounter, FinalCounter) :-
 % Filter and render sequent
 render_sequent(Gamma > Delta, VarCounter, FinalCounter) :-
     % ALWAYS use Gamma from sequent, NOT premiss_list!
-    filter_top_from_gamma(Gamma, FilteredGamma),
+    filter_top_from_gamma(Gamma, FilteredGamma0),
+    filter_empty_lists(FilteredGamma0, FilteredGamma),
 
     ( FilteredGamma = [] ->
         % Theorem: no premisses to display
@@ -1940,16 +1962,19 @@ render_sequent(Gamma > Delta, VarCounter, FinalCounter) :-
         render_formula_list(FilteredGamma, VarCounter, TempCounter),
         write(' \\vdash ')
     ),
-    ( Delta = [] ->
+    
+    filter_empty_lists(Delta, FilteredDelta),
+    ( FilteredDelta = [] ->
         write('\\bot'),
         FinalCounter = TempCounter
     ;
-        render_formula_list(Delta, TempCounter, FinalCounter)
+        render_formula_list(FilteredDelta, TempCounter, FinalCounter)
     ).
 
 % Render antisequent with \nvdash (for refutations)
 render_antisequent(Gamma < Delta, VarCounter, FinalCounter) :-
-    filter_top_from_gamma(Gamma, FilteredGamma),
+    filter_top_from_gamma(Gamma, FilteredGamma0),
+    filter_empty_lists(FilteredGamma0, FilteredGamma),
 
     ( FilteredGamma = [] ->
         write(' \\nvdash '),
@@ -1958,12 +1983,19 @@ render_antisequent(Gamma < Delta, VarCounter, FinalCounter) :-
         render_formula_list(FilteredGamma, VarCounter, TempCounter),
         write(' \\nvdash ')
     ),
-    ( Delta = [] ->
+    
+    filter_empty_lists(Delta, FilteredDelta),
+    ( FilteredDelta = [] ->
         write('\\bot'),
         FinalCounter = TempCounter
     ;
-        render_formula_list(Delta, TempCounter, FinalCounter)
+        render_formula_list(FilteredDelta, TempCounter, FinalCounter)
     ).
+
+% filter_empty_lists/2: Remove empty list [] elements
+filter_empty_lists([], []).
+filter_empty_lists([[]|T], Filtered) :- !, filter_empty_lists(T, Filtered).
+filter_empty_lists([H|T], [H|RestFiltered]) :- filter_empty_lists(T, RestFiltered).
 
 % filter_top_from_gamma/2: Remove top (⊤) from premisses list
 filter_top_from_gamma([], []).
