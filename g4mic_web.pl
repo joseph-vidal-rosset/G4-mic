@@ -988,38 +988,133 @@ proof_uses_lbot(Term) :-
     Term =.. [_|Args],
     member(Arg, Args),
     proof_uses_lbot(Arg).
+
+% Check if proof ends with asq (refutation) - ANY branch ending with asq
+proof_is_refutation(Proof) :-
+    proof_ends_with_asq(Proof), !.  % Cut as soon as we find asq
+
+% Base cases: direct asq means refutation
+proof_ends_with_asq(asq(_,_)) :- !.
+proof_ends_with_asq(asq(_,_,_)) :- !.
+
+% Unary rules: follow the single subproof
+proof_ends_with_asq(ip(_, Subproof)) :- !, proof_ends_with_asq(Subproof).
+proof_ends_with_asq(rcond(_, Subproof)) :- !, proof_ends_with_asq(Subproof).
+proof_ends_with_asq(rall(_, Subproof)) :- !, proof_ends_with_asq(Subproof).
+proof_ends_with_asq(rex(_, Subproof)) :- !, proof_ends_with_asq(Subproof).
+proof_ends_with_asq(lex(_, Subproof)) :- !, proof_ends_with_asq(Subproof).
+proof_ends_with_asq(lall(_, Subproof)) :- !, proof_ends_with_asq(Subproof).
+proof_ends_with_asq(land(_, Subproof)) :- !, proof_ends_with_asq(Subproof).
+proof_ends_with_asq(l0cond(_, Subproof)) :- !, proof_ends_with_asq(Subproof).
+proof_ends_with_asq(landto(_, Subproof)) :- !, proof_ends_with_asq(Subproof).
+proof_ends_with_asq(tne(_, Subproof)) :- !, proof_ends_with_asq(Subproof).
+proof_ends_with_asq(lorto(_, Subproof)) :- !, proof_ends_with_asq(Subproof).
+proof_ends_with_asq(cq_c(_, Subproof)) :- !, proof_ends_with_asq(Subproof).
+proof_ends_with_asq(cq_m(_, Subproof)) :- !, proof_ends_with_asq(Subproof).
+proof_ends_with_asq(ror(_, Subproof)) :- !, proof_ends_with_asq(Subproof).
+
+% Binary rules: check BOTH branches (OR)
+proof_ends_with_asq(ltoto(_, P1, P2)) :- !, (proof_ends_with_asq(P1) ; proof_ends_with_asq(P2)).
+proof_ends_with_asq(lor(_, P1, P2)) :- !, (proof_ends_with_asq(P1) ; proof_ends_with_asq(P2)).
+proof_ends_with_asq(rand(_, P1, P2)) :- !, (proof_ends_with_asq(P1) ; proof_ends_with_asq(P2)).
+proof_ends_with_asq(lex_lor(_, P1, P2)) :- !, (proof_ends_with_asq(P1) ; proof_ends_with_asq(P2)).
+
+% Base cases that are NOT refutations
+proof_ends_with_asq(ax(_,_)) :- !, fail.
+proof_ends_with_asq(lbot(_,_)) :- !, fail.
+proof_ends_with_asq(_) :- fail.
 % =========================================================================
 % MINIMAL INTERFACE decide/1
 % =========================================================================
 
 % decide/1 for biconditionals
 decide(Left <=> Right) :- !,
-    % VALIDATION
-    validate_and_warn(Left, _),
-    validate_and_warn(Right, _),
-    time((
-        decide_silent(Left => Right, _, Logic1),
-        decide_silent(Right => Left, _, Logic2)
-    )),
-    write('Direction 1 ('), write(Left => Right), write(') is valid in '),
-    write(Logic1), write(' logic'), nl,
-    write('Direction 2 ('), write(Right => Left), write(') is valid in '),
-    write(Logic2), write(' logic'), nl,
-    !.
+    % Check if user meant sequent equivalence (<>) instead of biconditional (<=>)
+    ( (is_list(Left) ; is_list(Right)) ->
+        nl,
+        write('╔═══════════════════════════════════════════════════════════════╗'), nl,
+        write('║  ⚠️  SYNTAX ERROR: <=> used with sequents                     ║'), nl,
+        write('╚═══════════════════════════════════════════════════════════════╝'), nl,
+        nl,
+        write('You wrote: '), write(Left <=> Right), nl,
+        nl,
+        write('❌ WRONG:  <=>  is for biconditionals between FORMULAS'), nl,
+        write('   Example: p <=> q'), nl,
+        nl,
+        write('✅ CORRECT: <>  is for equivalence between SEQUENTS'), nl,
+        write('   Example: [p] <> [q]'), nl,
+        nl,
+        write('Please use: '), write([Left] <> [Right]), nl,
+        nl,
+        fail
+    ;
+        % Normal biconditional processing
+        validate_and_warn(Left, _),
+        validate_and_warn(Right, _),
+        time((
+            decide_silent(Left => Right, Proof1, Logic1),
+            decide_silent(Right => Left, Proof2, Logic2)
+        )),
+        % Check if proofs are refutations (any branch ending with asq)
+        ( proof_is_refutation(Proof1) ->
+            write('Direction 1 ('), write(Left => Right), write(') is INVALID'), nl
+        ;
+            write('Direction 1 ('), write(Left => Right), write(') is valid in '),
+            write(Logic1), write(' logic'), nl
+        ),
+        ( proof_is_refutation(Proof2) ->
+            write('Direction 2 ('), write(Right => Left), write(') is INVALID'), nl
+        ;
+            write('Direction 2 ('), write(Right => Left), write(') is valid in '),
+            write(Logic2), write(' logic'), nl
+        ),
+        !
+    ).
 
 % decide/1 for sequent equivalence (must come before Formula catch-all)
 decide([Left] <> [Right]) :- !,
-    % VALIDATION
+    % Check if user meant biconditional (<=>) instead of sequent equivalence (<>)
+    ( (\+ is_list(Left), \+ is_list(Right)) ->
+        nl,
+        write('╔═══════════════════════════════════════════════════════════════╗'), nl,
+        write('║  💡 TIP: <> used with single formulas                        ║'), nl,
+        write('╚═══════════════════════════════════════════════════════════════╝'), nl,
+        nl,
+        write('You wrote: '), write([Left] <> [Right]), nl,
+        nl,
+        write('This is valid syntax for sequent equivalence, but you might want:'), nl,
+        nl,
+        write('Option 1 (Biconditional): '), write(Left <=> Right), nl,
+        write('  → Tests bidirectional implication between formulas'), nl,
+        nl,
+        write('Option 2 (Sequent Equivalence): '), write([Left] <> [Right]), nl,
+        write('  → Tests bidirectional provability between sequents'), nl,
+        nl,
+        write('Proceeding with sequent equivalence...'), nl,
+        nl
+    ;
+        true
+    ),
+    % Normal sequent equivalence processing
     validate_and_warn(Left, _),
     validate_and_warn(Right, _),
     time((
-        prove_sequent_silent([Left] > [Right], _, Logic1),
-        prove_sequent_silent([Right] > [Left], _, Logic2)
+        prove_sequent_silent([Left] > [Right], Proof1, Logic1),
+        prove_sequent_silent([Right] > [Left], Proof2, Logic2)
     )),
-    write('Direction 1 ('), write(Left), write(' |- '), write(Right), write(') is valid in '),
-    write(Logic1), write(' logic'), nl,
-    write('Direction 2 ('), write(Right), write(' |- '), write(Left), write(') is valid in '),
-    write(Logic2), write(' logic'), nl,
+    % Check if proofs are refutations (any branch ending with asq)
+    ( proof_is_refutation(Proof1) ->
+        write('Direction 1 ('), write(Left), write(' |- '), write(Right), write(') is INVALID'), nl
+    ;
+        write('Direction 1 ('), write(Left), write(' |- '), write(Right), write(') is valid in '),
+        write(Logic1), write(' logic'), nl
+    ),
+    ( proof_is_refutation(Proof2) ->
+        write('Direction 2 ('), write(Right), write(' |- '), write(Left), write(') is INVALID'), nl
+    ;
+        write('Direction 2 ('), write(Right), write(' |- '), write(Left), write(') is valid in '),
+        write(Logic2), write(' logic'), nl
+    ),
     !.
 
 % decide/1 for sequents
