@@ -311,8 +311,7 @@ prove(G > D) :-
     output_proof_results(OutputProof, Logic, G > D, sequent).
 
 % =========================================================================
-% BICONDITIONAL - Section complète corrigée (groupée par style de preuve)
-% À REMPLACER : lignes 318-436 dans g4mic_web.pl
+% BICONDITIONAL - Complete corrected section (grouped by proof style)
 % =========================================================================
 
 prove(Left <=> Right) :- !,
@@ -475,8 +474,7 @@ prove(Left <=> Right) :- !,
     ), nl, nl, !.
 
 % =========================================================================
-% SEQUENT EQUIVALENCE (<>) - Section complète corrigée (groupée par style)
-% À REMPLACER : lignes 440-566 dans g4mic_web.pl
+% SEQUENT EQUIVALENCE (<>) - Complete corrected section (grouped by style)
 % =========================================================================
 
 prove([Left] <> [Right]) :- !,
@@ -994,6 +992,7 @@ proof_uses_lbot(Term) :-
 % MINIMAL INTERFACE decide/1
 % =========================================================================
 
+% decide/1 for biconditionals
 decide(Left <=> Right) :- !,
     % VALIDATION
     validate_and_warn(Left, _),
@@ -1008,6 +1007,43 @@ decide(Left <=> Right) :- !,
     write(Logic2), write(' logic'), nl,
     !.
 
+% decide/1 for sequent equivalence (must come before Formula catch-all)
+decide([Left] <> [Right]) :- !,
+    % VALIDATION
+    validate_and_warn(Left, _),
+    validate_and_warn(Right, _),
+    time((
+        prove_sequent_silent([Left] > [Right], _, Logic1),
+        prove_sequent_silent([Right] > [Left], _, Logic2)
+    )),
+    write('Direction 1 ('), write(Left), write(' |- '), write(Right), write(') is valid in '),
+    write(Logic1), write(' logic'), nl,
+    write('Direction 2 ('), write(Right), write(' |- '), write(Left), write(') is valid in '),
+    write(Logic2), write(' logic'), nl,
+    !.
+
+% decide/1 for sequents
+decide(G > D) :-
+    G \= [], !,
+    % VALIDATION
+    validate_sequent_formulas(G, D),
+    copy_term((G > D), (GCopy > DCopy)),
+    prepare_sequent_formulas(GCopy, DCopy, PrepG, PrepD),
+
+    ( member(SingleGoal, PrepD), is_classical_pattern(SingleGoal) ->
+        time(provable_at_level(PrepG > PrepD, classical, _)),
+        write('Valid in classical logic'), nl
+    ; time(provable_at_level(PrepG > PrepD, minimal, _)) ->
+        write('Valid in minimal logic'), nl
+    ; time(provable_at_level(PrepG > PrepD, intuitionistic, _)) ->
+        write('Valid in intuitionistic logic'), nl
+    ;
+        time(provable_at_level(PrepG > PrepD, classical, _)),
+        write('Valid in classical logic'), nl
+    ),
+    !.
+
+% decide/1 for theorems (catch-all - must come last)
 decide(Formula) :-
     copy_term(Formula, FormulaCopy),
     prepare(FormulaCopy, [], F0),
@@ -1022,45 +1058,6 @@ decide(Formula) :-
     ),
     !.
 
-% decide/1 for sequents
-decide(G > D) :-
-    G \= [], !,
-    % VALIDATION
-    validate_sequent_formulas(G, D),
-    copy_term((G > D), (GCopy > DCopy)),
-    prepare_sequent_formulas(GCopy, DCopy, PrepG, PrepD),
-
-    ( DCopy = [SingleGoal], is_classical_pattern(SingleGoal) ->
-        time(provable_at_level(PrepG > PrepD, classical, _)),
-        write('Valid in classical logic'), nl
-    ; time(provable_at_level(PrepG > PrepD, minimal, _)) ->
-        write('Valid in minimal logic'), nl
-    ; time(provable_at_level(PrepG > PrepD, constructive, Proof)) ->
-        ( proof_uses_lbot(Proof) ->
-            write('Valid in intuitionistic logic'), nl
-        ;
-            write('Valid in intuitionistic logic'), nl
-        )
-    ;
-        time(provable_at_level(PrepG > PrepD, classical, _)),
-        write('Valid in classical logic'), nl
-    ),
-    !.
-
-% Equivalence for decide
-decide([Left] <> [Right]) :- !,
-    % VALIDATION
-    validate_and_warn(Left, _),
-    validate_and_warn(Right, _),
-    time((
-        prove_sequent_silent([Left] > [Right], _, Logic1),
-        prove_sequent_silent([Right] > [Left], _, Logic2)
-    )),
-    write('Direction 1 ('), write(Left), write(' |- '), write(Right), write(') is valid in '),
-    write(Logic1), write(' logic'), nl,
-    write('Direction 2 ('), write(Right), write(' |- '), write(Left), write(') is valid in '),
-    write(Logic2), write(' logic'), nl,
-    !.
 
 % =========================================================================
 % HELP SYSTEM
@@ -1115,8 +1112,8 @@ examples :-
     write('  ?- prove(?[y]:(d(y) => ![x]:d(x))).'), nl,
     nl.
 % =========================================================================
-% TRADUCTION DU BICONDITIONNELLE INTERNE
-% A <=> B devient (A => B) & (B => A)
+% INTERNAL BICONDITIONAL TRANSLATION
+% A <=> B becomes (A => B) & (B => A)
 % =========================================================================
 
 subst_bicond(A <=> B, (A1 => B1) & (B1 => A1)) :-
@@ -2850,7 +2847,7 @@ fitch_g4_proof(ltoto((Premisses > _), SP1, SP2), Context, Scope, CurLine, NextLi
     format(atom(Just2), '$ \\to E $ ~w,~w', [ComplexLine, ImpLine]),
     render_have(Scope, Cons, Just2, ImpLine, MPLine, V4, V5),
 
-    % ÉTAPE 6 : Continuer avec SP2
+    % STEP 6: Continue with SP2
     fitch_g4_proof(SP2, [MPLine:Cons, ImpLine:(Ant => Inter), ExtractLine:(Inter => Cons)|Context],
                   Scope, MPLine, NextLine, ResLine, V5, VarOut).
 % =========================================================================
@@ -2944,7 +2941,7 @@ fitch_g4_proof(lex_lor((_ > [Goal]), SP1, SP2), Context, Scope, CurLine, NextLin
 fitch_g4_proof(cq_c((Premisses > _), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     extract_new_formula(Premisses, SubProof, NewFormula),
     select((![Z-X]:A) => B, Premisses, _),
-    find_context_line((![Z-X]:A) => B, Context, Line),  % ← CORRECTION
+    find_context_line((![Z-X]:A) => B, Context, Line),  % Find the right line in context
     derive_and_continue(Scope, NewFormula, '$ CQ_{c} $ ~w', [Line], cq_c(Line),
                        SubProof, Context, CurLine, NextLine, ResLine, VarIn, VarOut).
 
@@ -2952,7 +2949,7 @@ fitch_g4_proof(cq_c((Premisses > _), SubProof), Context, Scope, CurLine, NextLin
 fitch_g4_proof(cq_m((Premisses > _), SubProof), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :- !,
     extract_new_formula(Premisses, SubProof, NewFormula),
     select((?[Z-X]:A)=>B, Premisses, _),
-    find_context_line((?[Z-X]:A)=>B, Context, Line),  % ← CORRECTION : cherche la bonne ligne
+    find_context_line((?[Z-X]:A)=>B, Context, Line),  % Find the right line in context
     derive_and_continue(Scope, NewFormula, '$ CQ_{m} $ ~w', [Line], cq_m(Line),
                        SubProof, Context, CurLine, NextLine, ResLine, VarIn, VarOut).
 
@@ -3928,7 +3925,7 @@ rewrite((A | B), J, K, (C ' \\lor ' D)) :-
     rewrite(A, J, H, C),
     rewrite(B, H, K, D).
 
-% AFFICHAGE COSMETIQUE : A => # devient !A
+% COSMETIC DISPLAY: A => # becomes ~A
 rewrite((A => #), J, K, (' \\lnot ' C)) :-
     !,
     rewrite(A, J, K, C).
@@ -4304,7 +4301,7 @@ replace_specific_asq(_, _, Term, Term).
 :- dynamic formula_level/1.
 
 % =========================================================================
-% DETECTION PRINCIPALE
+% MAIN DETECTION
 % =========================================================================
 
 detect_and_set_logic_level(Formula) :-
@@ -4316,12 +4313,12 @@ detect_and_set_logic_level(Formula) :-
     ).
 
 % =========================================================================
-% HEURISTIQUES DE DETECTION FOL
+% FOL DETECTION HEURISTICS
 % A formula is FOL if it contains:
-% - Des quantificateurs (?, ?)
+% - Quantifiers (!, ?)
 % - Predicate applications p(t1,...,tn) with n > 0
 % - Equalities between terms
-% - Des fonctions de Skolem
+% - Skolem functions
 % =========================================================================
 
 is_fol_formula(Formula) :-
