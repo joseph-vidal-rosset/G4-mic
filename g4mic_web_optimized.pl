@@ -20,6 +20,7 @@
 :- use_module(library(lists)).
 :- use_module(library(statistics)).
 :- use_module(library(terms)).
+:- [equality_helper].
 % =========================================================================
 % TPTP OPERATORS (input syntax)
 % =========================================================================
@@ -93,10 +94,13 @@ show_banner :-
 % =========================================================================
 % ITERATION LIMITS CONFIGURATION
 % =========================================================================
-logic_iteration_limit(constructive, 5).
+% =========================================================================
+% ITERATION LIMITS CONFIGURATION
+% =========================================================================
+logic_iteration_limit(constructive, 15).
 logic_iteration_limit(classical, 15).
-logic_iteration_limit(minimal, 8).
-logic_iteration_limit(intuitionistic, 10).
+logic_iteration_limit(minimal, 15).
+logic_iteration_limit(intuitionistic, 15).
 logic_iteration_limit(fol, 15).
 
 
@@ -1337,7 +1341,6 @@ subst_neg(A, A).
 % =========================================================================
 % AXIOMS
 % =========================================================================
-
 % Axiom (atomic formula match)
 prove(Gamma > Delta, _, _, J, J, _, _, ax(Gamma>Delta, ax)) :-
     member(A, Gamma),
@@ -1345,6 +1348,40 @@ prove(Gamma > Delta, _, _, J, J, _, _, ax(Gamma>Delta, ax)) :-
     A\=(!  _), A\=(? _),
     Delta = [B],
     unify_with_occurs_check(A, B).
+% =========================================================================
+% AXIOM - REINFORCED
+% =========================================================================
+
+% Axiom (atomic formula match)
+prove(Gamma > Delta, _, _, J, J, _, _, ax(Gamma>Delta, ax)) :-
+    member(A, Gamma),
+    A \= (_&_),
+    A \= (_|_),
+    A \= (_=>_),
+    A \= (!  _),
+    A \= (? _),
+    Delta = [B],
+    B \= (_&_),
+    B \= (_|_),
+    B \= (_=>_),
+    B \= (!  _),
+    B \= (? _),
+    (unify_with_occurs_check(A, B) ; A == B).
+
+% Axiom with false (contradiction in Gamma)
+prove(Gamma > _, _, _, J, J, _, _, ax(Gamma>_, ax)) :-
+    member(false___, Gamma).
+
+% Axiom with negation (A and ~A on opposite sides)
+prove(Gamma > Delta, _, _, J, J, _, _, ax(Gamma>Delta, ax)) :-
+    member(A, Gamma),
+    member(~B, Delta),
+    (unify_with_occurs_check(A, B) ; A == B).
+
+prove(Gamma > Delta, _, _, J, J, _, _, ax(Gamma>Delta, ax)) :-
+    member(~A, Gamma),
+    member(B, Delta),
+    (unify_with_occurs_check(A, B) ; A == B).
 
 % L-bot (explosion rule for intuitionistic/classical)
 prove(Gamma > Delta, _, _, J, J, LogicLevel, _, lbot(Gamma>Delta, #)) :-
@@ -1503,85 +1540,27 @@ prove(Gamma > Delta, FV, I, J, K, LogicLevel, Reg, cq_m(Gamma>Delta, P)) :-
     \+ member_term(X, FV),
     prove([![Z-X]:(A=>B)|G1] > Delta, FV, I, J, K, LogicLevel, Reg, P).
 
-% =========================================================================
-% EQUALITY RULES
-% =========================================================================
-
-% Reflexivity
-prove(_Gamma > Delta, _, _, J, J, _, _, eq_refl(Delta)) :-
-    Delta = [T = T],
-    ground(T), !.
-
-% Symmetry
-prove(Gamma > Delta, _, _, J, J, _, _, eq_sym(Gamma>Delta)) :-
-    Delta = [A = B],
-    member(B = A, Gamma), !.
-
-% Transitivity
-prove(Gamma > Delta, _, _, J, J, _, _, eq_trans(Gamma>Delta)) :-
-    Delta = [A = C],
-    A \== C,
-    (   (member(A = B, Gamma), member(B = C, Gamma))
-    ;   (member(B = A, Gamma), member(B = C, Gamma))
-    ;   (member(A = B, Gamma), member(C = B, Gamma))
-    ;   (member(B = A, Gamma), member(C = B, Gamma))
-    ), !.
-
-% Chained transitivity
-prove(Gamma > Delta, _, _, J, J, _, _, eq_trans_chain(Gamma>Delta)) :-
-    Delta = [A = C],
-    A \== C,
-    \+ member(A = C, Gamma),
-    \+ member(C = A, Gamma),
-    find_equality_path(A, C, Gamma, [A], _Path), !.
-
-% Congruence
-prove(Gamma > Delta, _, _, J, J, _, _, eq_cong(Gamma>Delta)) :-
-    Delta = [LHS = RHS],
-    LHS =..  [F|ArgsL],
-    RHS =.. [F|ArgsR],
-    length(ArgsL, N), length(ArgsR, N), N > 0,
-    find_diff_pos(ArgsL, ArgsR, _Pos, TermL, TermR),
-    (member(TermL = TermR, Gamma) ; member(TermR = TermL, Gamma)), !.
-
-% Substitution in equality
-prove(Gamma > Delta, _, _, J, J, _, _, eq_subst_eq(Gamma>Delta)) :-
-    Delta = [Goal_LHS = Goal_RHS],
-    member(Ctx_LHS = Ctx_RHS, Gamma),
-    Ctx_LHS \== Goal_LHS,
-    member(X = Y, Gamma), X \== Y,
-    (   (substitute_in_term(X, Y, Ctx_LHS, Goal_LHS), Ctx_RHS == Goal_RHS)
-    ;   (substitute_in_term(Y, X, Ctx_LHS, Goal_LHS), Ctx_RHS == Goal_RHS)
-    ;   (substitute_in_term(X, Y, Ctx_RHS, Goal_RHS), Ctx_LHS == Goal_LHS)
-    ;   (substitute_in_term(Y, X, Ctx_RHS, Goal_RHS), Ctx_LHS == Goal_LHS)
-    ), !.
-
-% Leibniz substitution
-prove(Gamma > Delta, _, _, J, J, _, _, eq_subst(Gamma>Delta)) :-
-    Delta = [Goal],
-    Goal \= (_ = _), Goal \= (_ => _), Goal \= (_ & _),
-    Goal \= (_ | _), Goal \= (!_), Goal \= (?_),
-    member(A = B, Gamma),
-    member(Pred, Gamma),
-    Pred \= (_ = _), Pred \= (_ => _), Pred \= (_ & _), Pred \= (_ | _),
-    Pred =.. [PredName|Args],
-    Goal =.. [PredName|GoalArgs],
-    member_pos(A, Args, Pos),
-    nth0(Pos, GoalArgs, B), ! .
-
+/*
+% EQUALITY RULES (native, no axioms)
+prove(_G>D,_,_,J,J,_,_,eq_refl):-D=[eq(T,T)],!.
+prove(G>D,_,_,J,J,_,_,eq_sym):-D=[eq(A,B)],member(eq(B,A),G),!.
+prove(G>D,_,_,J,J,_,_,eq_trans):-D=[eq(A,C)],member(eq(A,B),G),member(eq(B,C),G),!.
+prove(G>D,_,_,J,J,_,_,eq_subst):-D=[Goal],(Goal=..[P,T2]),P\=eq,member(eq(T1,T2),G),(Premise=..[P,T1]),member(Premise,G),!.
+*/
 % =========================================================================
 % ANTISEQUENT (only when enabled)
 % =========================================================================
 
+% ANTISEQUENT - CONSERVATIVE (only after iteration 7)
 prove([] > Delta, _, I, J, J, classical, _, asq([] < Delta, _)) :-
     nb_current(asq_enabled, true),
-    I >= 5,
+    I >= 7,  % Only after iteration 7
     Delta = [B],
     B \= asq, B \= asq(_,_), !.
 
 prove(Gamma > Delta, _, I, J, J, classical, _, asq(Gamma < Delta, _)) :-
     nb_current(asq_enabled, true),
-    I >= 5,
+    I >= 7,  % Only after iteration 7
     Gamma \= [],
     Delta = [B],
     B \= asq, B \= asq(_,_),
@@ -1589,6 +1568,38 @@ prove(Gamma > Delta, _, I, J, J, classical, _, asq(Gamma < Delta, _)) :-
     A \= asq, A \= asq(_,_),
     \+ member(A, Delta), !.
 
+
+% =========================================================================
+% ANTISEQUENT - CORRECTED
+% =========================================================================
+
+% Empty context antisequent
+prove([] > Delta, _, I, J, J, classical, _, asq([] < Delta, _)) :-
+    nb_current(asq_enabled, true),
+    I >= 7,
+    Delta = [B],
+    B \= asq, B \= asq(_,_),
+    B \= false___,  % ✅ Rejeter ⊥
+    !.
+
+% Non-empty context antisequent
+prove(Gamma > Delta, _, I, J, J, classical, _, asq(Gamma < Delta, _)) :-
+    nb_current(asq_enabled, true),
+    I >= 7,
+    Gamma \= [],
+    Delta = [B],
+    B \= asq, B \= asq(_,_),
+    B \= false___,  % ✅ Rejeter ⊥
+
+    % ✅ CRITIQUE: Rejeter si B (l'élément de Delta) est dans Gamma
+    \+ member(B, Gamma),
+
+    % ✅ Vérifier qu'il existe au moins un élément valide dans Gamma
+    member(A, Gamma),
+    A \= asq, A \= asq(_,_),
+    A \= false___,
+
+    ! .
 % =========================================================================
 % HELPERS
 % =========================================================================
@@ -4653,6 +4664,9 @@ detect_bicond_in_terms(A <=> B, warning(bicond_between_terms, A, B)) :-
     is_definitely_term(B),
     !.
 
+
+
+
 detect_bicond_in_terms(Term, Warning) :-
     compound(Term),
     Term \= (_ <=> _),  % Don't recurse into biconditionals we already checked
@@ -4664,6 +4678,7 @@ detect_bicond_in_terms(Term, Warning) :-
 % DEFINITELY A TERM (not a formula)
 % =========================================================================
 % Conservative: only flag obvious cases
+
 is_definitely_term(![_]:_) :- !, fail.  % Universal quantification = formula
 is_definitely_term(?[_]:_) :- !, fail.  % Existential quantification = formula
 

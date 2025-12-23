@@ -10,7 +10,7 @@
 % IMPORTANT: Uncomment ONE of these lines depending on your setup:
 
 % If using the fixed web2 version:
-:- ['g4mic_web_FINAL.pl'].
+:- ['g4mic_web_optimized.pl'].
 
 % If using the original web_en version:
 % :- ['g4mic_web_en.pl'].

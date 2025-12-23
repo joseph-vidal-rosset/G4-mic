@@ -20,6 +20,10 @@
 :- use_module(library(lists)).
 :- use_module(library(statistics)).
 :- use_module(library(terms)).
+
+% Load standalone nanoCop validator (no conflicts)
+:- catch([nanocop_validator], _, true).
+
 % =========================================================================
 % TPTP OPERATORS (input syntax)
 % =========================================================================
@@ -761,7 +765,18 @@ prove(Formula) :-
             OutputProof = Proof
         )
     ),
-    output_proof_results(OutputProof, Logic, Formula, theorem).
+    output_proof_results(OutputProof, Logic, Formula, theorem),
+    % === nanoCop validation ===
+    nl,
+    write('═══════════════════════════════════════════════════════════════'), nl,
+    write('🔍 nanoCop Validation'), nl,
+    write('═══════════════════════════════════════════════════════════════'), nl,
+    (catch(validate_nanocop(Formula), _, fail) ->
+        write('  ✅ nanoCop: proved'), nl
+    ;
+        write('  ⚠️  nanoCop: not proved'), nl
+    ),
+    nl.
 
 % =========================================================================
 % HELPERS
