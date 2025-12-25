@@ -133,20 +133,13 @@ contains_equality_symbol(_) :- fail.
 % =========================================================================
 % ITERATION LIMITS CONFIGURATION
 % =========================================================================
-
 logic_iteration_limit(constructive, 7).
 logic_iteration_limit(classical, 8).
 logic_iteration_limit(minimal, 6).
 logic_iteration_limit(intuitionistic, 7).
 logic_iteration_limit(fol, 8).
 
-/*
-logic_iteration_limit(constructive, 3).
-logic_iteration_limit(classical, 15).
-logic_iteration_limit(minimal, 3).
-logic_iteration_limit(intuitionistic, 5).
-logic_iteration_limit(fol, 15).
-*/
+
 % =========================================================================
 % UTILITY for/3
 % =========================================================================
@@ -253,12 +246,10 @@ contains_classical_pattern(Formula) :-
 contains_classical_pattern(Formula) :-
     binary_connective(Formula, Left, Right),
     (contains_classical_pattern(Left) ; contains_classical_pattern(Right)), !.
-/*
 contains_classical_pattern(![_-_]:A) :-
     contains_classical_pattern(A), !.
 contains_classical_pattern(?[_-_]:A) :-
     contains_classical_pattern(A), !.
-*/
 
 binary_connective(A & B, A, B).
 binary_connective(A | B, A, B).
@@ -1044,51 +1035,73 @@ progressive_proof_silent(Formula, Proof, Logic) :-
     ).
 
 % =========================================================================
-% PROVABILITY AT A GIVEN LEVEL
+% PROVABILITY AT A GIVEN LEVEL (leanSeq strategy - no init_eigenvars)
 % =========================================================================
-
 provable_at_level(Sequent, constructive, P) :-
     !,
     logic_iteration_limit(constructive, MaxIter),
     for(Threshold, 0, MaxIter),
     Sequent = (Gamma > Delta),
-    init_eigenvars,  % Initialize before each attempt
-    ( g4mic_proves(Gamma > Delta, [], Threshold, 1, _, minimal, P) -> true    % <- Essayer minimal d'abord
-    ; init_eigenvars, g4mic_proves(Gamma > Delta, [], Threshold, 1, _, intuitionistic, P)     % <- Then intuitionistic if failure
+    catch(
+        ( g4_proves(Gamma > Delta, [], Threshold, 1, _, minimal, [], P) -> true
+        ; g4_proves(Gamma > Delta, [], Threshold, 1, _, intuitionistic, [], P)
+        ),
+        error(occurs_check(_,_), _),
+        (   % DEBUG: show that occurs_check was caught
+            % write('[DEBUG: occurs_check caught in constructive]'), nl,
+            nb_setval(occurs_check_detected, true),
+            fail
+        )
     ),
     !.
 
 provable_at_level(Sequent, LogicLevel, Proof) :-
-    LogicLevel \= classical,  % For non-classical logics
+    LogicLevel \= classical,
     logic_iteration_limit(LogicLevel, MaxIter),
     for(Threshold, 0, MaxIter),
     Sequent = (Gamma > Delta),
-    init_eigenvars,
-    g4mic_proves(Gamma > Delta, [], Threshold, 1, _, LogicLevel, Proof),
+    catch(
+        g4_proves(Gamma > Delta, [], Threshold, 1, _, LogicLevel, [], Proof),
+        error(occurs_check(_,_), _),
+        (   % DEBUG: show that occurs_check was caught
+            % write('[DEBUG: occurs_check caught in non-classical]'), nl,
+            nb_setval(occurs_check_detected, true),
+            fail
+        )
+    ),
     !.
 
-% CLASSICAL LOGIC: Two-pass approach
-% PASS 1: Normal proof search (antisequent disabled)
-% PASS 2: If pass 1 fails, enable antisequent and search for counter-model
 provable_at_level(Sequent, classical, Proof) :-
     Sequent = (Gamma > Delta),
     logic_iteration_limit(classical, MaxIter),
-    (   % PASS 1: Normal proof
-        (for(Threshold, 0, MaxIter),
-         init_eigenvars,
-         g4mic_proves(Gamma > Delta, [], Threshold, 1, _, classical, Proof))
-    ->  true  % Success - proof found
-    ;   % PASS 2: Antisequent (only if pass 1 failed completely)
-        nb_setval(asq_enabled, true),
-        once((  % USE ONCE to prevent multiple solutions
-            for(Threshold, 0, MaxIter),
-            init_eigenvars,
-            g4mic_proves(Gamma > Delta, [], Threshold, 1, _, classical, Proof)
-        )),
-        nb_setval(asq_enabled, false)
+    catch(
+        (   for(Threshold, 0, MaxIter),
+            g4_proves(Gamma > Delta, [], Threshold, 1, _, classical, [], Proof)
+        ->  true
+        ;   nb_setval(asq_enabled, true),
+            once((
+                for(Threshold, 0, MaxIter),
+                g4_proves(Gamma > Delta, [], Threshold, 1, _, classical, [], Proof)
+            )),
+            nb_setval(asq_enabled, false)
+        ),
+        error(occurs_check(_,_), _),
+        (   % Display informative message about eigenvariable constraint
+            nl,
+            write('══════════════════════════════════════════════════════'), nl,
+            write('    FORMULA REFUTED: Eigenvariable Constraint Violation'), nl,
+            write('══════════════════════════════════════════════════════'), nl,
+            write('The formula cannot be proven: it would require circular'), nl,
+            write('term structures, which would violate the eigenvariable'), nl,
+            write('freshness condition.                                  '), nl,
+            write('This indicates that the formula is logically INVALID.   '), nl,
+            write('══════════════════════════════════════════════════════'), nl,
+            nl,
+            nb_setval(occurs_check_detected, true),
+            fail
+        )
     ),
-    !.  % Cut to prevent backtracking to alternative proofs
-
+    !.
 
 % =========================================================================
 % DISPLAY HELPERS
@@ -1123,7 +1136,7 @@ proof_uses_lbot(Term) :-
     Term =.. [_|Args],
     member(Arg, Args),
     proof_uses_lbot(Arg).
-/*
+
 % Check if proof ends with asq (refutation) - ANY branch ending with asq
 proof_is_refutation(Proof) :-
     proof_ends_with_asq(Proof), !.  % Cut as soon as we find asq
@@ -1158,7 +1171,7 @@ proof_ends_with_asq(lex_lor(_, P1, P2)) :- !, (proof_ends_with_asq(P1) ; proof_e
 proof_ends_with_asq(ax(_,_)) :- !, fail.
 proof_ends_with_asq(lbot(_,_)) :- !, fail.
 proof_ends_with_asq(_) :- fail.
-*/
+
 % =========================================================================
 % MINIMAL INTERFACE g4mic_decides/1
 % =========================================================================
@@ -1495,339 +1508,329 @@ subst_neg(A, A).
 % END OF DRIVER
 %=================================
 % =========================================================================
-% G4 FOL Prover with equality
-% TPTP-version
+% G4-mic FOL Prover - CORRECTED with LOCAL eigenvariable registry
+% Key fix: Registry passed as parameter, not global state
+% CRITICAL: Enable occurs_check to prevent circular unifications
 % =========================================================================
-% =========================================================================
-% EIGENVARIABLE REGISTRY (using b_setval for BACKTRACKABLE global state)
-% =========================================================================
-% Initialize eigenvariable registry (call before each proof attempt)
-% Using b_setval for BACKTRACKABLE global variable
-init_eigenvars :- b_setval(g4_eigenvars, []).
 
-% member_check(Term, List): check if Term is structurally equivalent (=@=) to any member
-member_check(Term, List) :-
-    member(Elem, List),
-    Term =@= Elem,
-    !.
+% Enable occurs check globally to prevent circular term structures
+:- set_prolog_flag(occurs_check, true).
 
-
-% g4mic_proves/7 -
-% g4mic_proves(Sequent, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, Proof)
+% g4_proves/8 - NOW WITH REGISTRY PARAMETER
+% g4_proves(Sequent, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, EigenRegistry, Proof)
 % LogicLevel: minimal | intuitionistic | classical
-%==========================================================================
+% EigenRegistry: list of eigenvariables used in current branch
+
+% =========================================================================
 % AXIOMS
-%=========================================================================
-% O.0 Ax
-g4mic_proves(Gamma > Delta, _, _, SkolemIn, SkolemIn, _, ax(Gamma>Delta, ax)) :-
+% =========================================================================
+
+% Axiom (atomic formula match)
+g4_proves(Gamma > Delta, _, _, J, J, _, _, ax(Gamma>Delta, ax)) :-
     member(A, Gamma),
-    A\=(_&_),
-    A\=(_|_),
-    A\=(_=>_),
-    A\=(!_),
-    A\=(?_),
+    A\=(_&_), A\=(_|_), A\=(_=>_),
+    A\=(!  _), A\=(? _),
     Delta = [B],
     unify_with_occurs_check(A, B).
-% 0.1 L-bot
-g4mic_proves(Gamma>Delta, _, _, SkolemIn, SkolemIn, LogicLevel, lbot(Gamma>Delta, #)) :-
+
+% L-bot (explosion rule for intuitionistic/classical)
+g4_proves(Gamma > Delta, _, _, J, J, LogicLevel, _, lbot(Gamma>Delta, #)) :-
     member(LogicLevel, [intuitionistic, classical]),
     member(#, Gamma), !.
-% =========================================================================
-%  PROPOSITIONAL RULES
-% =========================================================================
-% 1. L&
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, land(Gamma>Delta,P)) :-
-    select((A&B),Gamma,G1), !,
-    g4mic_proves([A,B|G1]>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, P).
-% 2. L0->
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, l0cond(Gamma>Delta,P)) :-
-    select((A=>B),Gamma,G1),
-    member(A,G1), !,
-    g4mic_proves([B|G1]>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, P).
-% 2. L&->
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, landto(Gamma>Delta,P)) :-
-    select(((A&B)=>C),Gamma,G1), !,
-    g4mic_proves([(A=>(B => C))|G1]>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, P).
-% 3. TNE : Odd Negation Elimination
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, tne(Gamma>Delta, P)) :-
-    Delta = [(A => B)],  % Goal: not-A
-    % Search in Gamma for a formula with more negations
-    member(LongNeg, Gamma),
-    % Verify that LongNeg = not^n(not-A) with n >= 2 (so total >= 3)
-    is_nested_negation(LongNeg, A => B, Depth),
-    Depth >= 2,  % At least 2 more negations than the goal
-    !,
-    g4mic_proves([A|Gamma]>[B], FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, P).
-% 7. IP (Indirect Proof - THE classical law).
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, classical, ip(Gamma>Delta, P)) :-
-    Delta = [A],  % Any goal A (not just bottom)
-    A \= #,   % Not already bottom
-    \+ member((A => #), Gamma),  % not-A not already in context
-    Threshold > 0,
-    g4mic_proves([(A => #)|Gamma]>[#], FreeVars, Threshold, SkolemIn, SkolemOut, classical, P).
-% 4. Lv-> (OPTIMIZED)
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, lorto(Gamma>Delta,P)) :-
-    select(((A|B)=>C),Gamma,G1), !,
-    % Check which disjuncts are present
-    ( member(A, G1), member(B, G1) ->
-        % Both present: keep both (rare case)
-        g4mic_proves([A=>C,B=>C|G1]>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, P)
-    ; member(A, G1) ->
-        % Only A present: keep only A=>C
-        g4mic_proves([A=>C|G1]>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, P)
-    ; member(B, G1) ->
-        % Only B present: keep only B=>C
-        g4mic_proves([B=>C|G1]>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, P)
-    ;
-        % Neither present: keep both (default behavior)
-        g4mic_proves([A=>C,B=>C|G1]>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, P)
-    ).
-% 5. Lv (fallback for all logics including minimal)
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, lor(Gamma>Delta, P1,P2)) :-
-    select((A|B),Gamma,G1), !,
-    g4mic_proves([A|G1]>Delta, FreeVars, Threshold, SkolemIn, J1, LogicLevel, P1),
-    g4mic_proves([B|G1]>Delta, FreeVars, Threshold, J1, SkolemOut, LogicLevel, P2).
-% 13. R-forall - with BACKTRACKABLE global eigenvariable registry
-g4mic_proves(Gamma > Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, rall(Gamma>Delta, P)) :-
-    select((![_Z-X]:A), Delta, D1), !,
-    copy_term((X:A,FreeVars), (f_sk(SkolemIn,FreeVars):A1,FreeVars)),
-    % CHECK: f_sk must not be identical to any previously used eigenvariable
-    % Using b_getval for backtrackable global variable
-    (catch(b_getval(g4_eigenvars, UsedVars), _, UsedVars = [])),
-    \+ member_check(f_sk(SkolemIn,FreeVars), UsedVars),
-    % Register this eigenvariable (backtrackable)
-    b_setval(g4_eigenvars, [f_sk(SkolemIn,FreeVars)|UsedVars]),
-    J1 is SkolemIn+1,
-    g4mic_proves(Gamma > [A1|D1], FreeVars, Threshold, J1, SkolemOut, LogicLevel, P).
-% 14. L-forall - WITH OTTEN's LIMITATION
-g4mic_proves(Gamma > Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, lall(Gamma>Delta, P)) :-
-    member((![_Z-X]:A), Gamma),
-    % OTTEN's CHECK: prevent infinite instantiation when threshold is reached
-    \+ length(FreeVars, Threshold),
-    copy_term((X:A,FreeVars), (Y:A1,FreeVars)),
-    g4mic_proves([A1|Gamma] > Delta, [Y|FreeVars], Threshold, SkolemIn, SkolemOut, LogicLevel, P), !.
-% 8. R->
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, rcond(Gamma>Delta,P)) :-
-    Delta = [A=>B], !,
-    g4mic_proves([A|Gamma]>[B], FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, P).
-% 6. L->->
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, ltoto(Gamma>Delta,P1,P2)) :-
-    select(((A=>B)=>C),Gamma,G1), !,
-    g4mic_proves([A,(B=>C)|G1]>[B], FreeVars, Threshold, SkolemIn, _J1, LogicLevel, P1),
-    g4mic_proves([C|G1]> Delta, FreeVars, Threshold, _K1, SkolemOut, LogicLevel, P2).
-% 9 LvExists  (Quantification Rule Exception: must be *before* Rv)
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, lex_lor(Gamma>Delta, P1, P2)) :-
-    select((?[_Z-X]:(A|B)), Gamma, G1), !,
-    copy_term((X:(A|B),FreeVars), (f_sk(SkolemIn,FreeVars):(A1|B1),FreeVars)),
-    J1 is SkolemIn+1,
-    g4mic_proves([A1|G1]>Delta, FreeVars, Threshold, J1, J2, LogicLevel, P1),
-    g4mic_proves([B1|G1]>Delta, FreeVars, Threshold, J2, SkolemOut, LogicLevel, P2).
-% 10. R?
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, ror(Gamma>Delta, P)) :-
-    Delta = [(A|B)], !,
-    (   g4mic_proves(Gamma>[A], FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, P)
-    ;   g4mic_proves(Gamma>[B], FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, P)
-    ).
-% 11. R-and : Right conjunction
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, rand(Gamma>Delta,P1,P2)) :-
-    Delta = [(A&B)], !,
-    g4mic_proves(Gamma>[A], FreeVars, Threshold, SkolemIn, J1, LogicLevel, P1),
-    g4mic_proves(Gamma>[B], FreeVars, Threshold, J1, SkolemOut, LogicLevel, P2).
- % 12. L-exists - with BACKTRACKABLE global eigenvariable registry
-g4mic_proves(Gamma > Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, lex(Gamma>Delta, P)) :-
-    select((?[_Z-X]:A), Gamma, G1), !,
-    % Auto-initialize on first call (check with catch for backtrackable variable)
-    (SkolemIn =:= 1, catch(b_getval(g4_eigenvars, _), _, true) -> init_eigenvars ; true),
-    copy_term((X:A,FreeVars), (f_sk(SkolemIn,FreeVars):A1,FreeVars)),
-    % CHECK: f_sk must not be identical to any previously used eigenvariable
-    % Using b_getval for backtrackable global variable
-    (catch(b_getval(g4_eigenvars, UsedVars), _, UsedVars = [])),
-    \+ member_check(f_sk(SkolemIn,FreeVars), UsedVars),
-    % Register this eigenvariable (backtrackable)
-    b_setval(g4_eigenvars, [f_sk(SkolemIn,FreeVars)|UsedVars]),
-    J1 is SkolemIn+1,
-    g4mic_proves([A1|G1] > Delta, FreeVars, Threshold, J1, SkolemOut, LogicLevel, P).
-% 15. R-exists
-g4mic_proves(Gamma > Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, rex(Gamma>Delta, P)) :-
-    select((?[_Z-X]:A), Delta, D1), !,
-    length(FreeVars, Len), Len < Threshold,
-    copy_term((X:A,FreeVars), (Y:A1,FreeVars)),
-    g4mic_proves(Gamma > [A1|D1], [Y|FreeVars], Threshold, SkolemIn, SkolemOut, LogicLevel, P), !.
-% 16. CQ_c - Classical rule
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, classical, cq_c(Gamma>Delta,P)) :-
-    select((![Z-X]:A) => B, Gamma, G1),
 
-    % Search for (exists?:?) => B in G1
-    ( member((?[ZTarget-YTarget]:ATarget) => B, G1),
-      % Compare (A => B) with ATarget
-      \+ \+ ((A => B) = ATarget) ->
-        % Unifiable: use YTarget
-        g4mic_proves([?[ZTarget-YTarget]:ATarget|G1]>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, classical, P)
+% =========================================================================
+% PROPOSITIONAL RULES (G4 specific)
+% =========================================================================
+
+% 1. L∧ - Left conjunction
+g4_proves(Gamma > Delta, FV, I, J, K, L, Reg, land(Gamma>Delta, P)) :-
+    select((A&B), Gamma, G1), !,
+    g4_proves([A,B|G1] > Delta, FV, I, J, K, L, Reg, P).
+
+% 2. L0→ - Modus ponens (G4 optimization)
+g4_proves(Gamma > Delta, FV, I, J, K, L, Reg, l0cond(Gamma>Delta, P)) :-
+    select((A=>B), Gamma, G1),
+    member(A, G1), !,
+    g4_proves([B|G1] > Delta, FV, I, J, K, L, Reg, P).
+
+% 3. L∧→ - Left conjunction-implication (G4 specific)
+g4_proves(Gamma > Delta, FV, I, J, K, L, Reg, landto(Gamma>Delta, P)) :-
+    select(((A&B)=>C), Gamma, G1), !,
+    g4_proves([(A=>(B=>C))|G1] > Delta, FV, I, J, K, L, Reg, P).
+
+% 4. TNE : Odd Negation Elimination (CORRECTED to prove/8)
+g4_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, Reg, tne(Gamma>Delta, P)) :-
+    Delta = [(A => B)],
+    member(LongNeg, Gamma),
+    is_nested_negation(LongNeg, A => B, Depth),
+    Depth >= 2,
+    !,
+    g4_proves([A|Gamma]>[B], FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, Reg, P).
+
+% 5. IP (Indirect Proof - CORRECTED to prove/8)
+g4_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, classical, Reg, ip(Gamma>Delta, P)) :-
+    Delta = [A],
+    A \= #,
+    \+ member((A => #), Gamma),
+    Threshold > 0,
+    g4_proves([(A => #)|Gamma]>[#], FreeVars, Threshold, SkolemIn, SkolemOut, classical, Reg, P).
+
+% 6. L∨→ - Left disjunction-implication (G4 specific, optimized)
+g4_proves(Gamma > Delta, FV, I, J, K, L, Reg, lorto(Gamma>Delta, P)) :-
+    select(((A|B)=>C), Gamma, G1), !,
+    ( member(A, G1), member(B, G1) ->
+        g4_proves([A=>C, B=>C|G1] > Delta, FV, I, J, K, L, Reg, P)
+    ; member(A, G1) ->
+        g4_proves([A=>C|G1] > Delta, FV, I, J, K, L, Reg, P)
+    ; member(B, G1) ->
+        g4_proves([B=>C|G1] > Delta, FV, I, J, K, L, Reg, P)
     ;
-        % Otherwise: normal case with X
-        g4mic_proves([?[Z-X]:(A => B)|G1]>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, classical, P)
+        g4_proves([A=>C, B=>C|G1] > Delta, FV, I, J, K, L, Reg, P)
     ).
-% 17. CQ_m - Minimal rule (minimal and intuitionistic ONLY, last resort)
-% IMPORTANT: EXCLUDED from classical logic (IP + standard rules suffice)
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, cq_m(Gamma>Delta,P)) :-
+% 7.  L∨ - Left disjunction (CRITICAL: each branch gets its own registry copy)
+g4_proves(Gamma > Delta, FV, I, J, K, L, Reg, lor(Gamma>Delta, P1, P2)) :-
+    select((A|B), Gamma, G1), !,
+    g4_proves([A|G1] > Delta, FV, I, J, J1, L, Reg, P1),
+    g4_proves([B|G1] > Delta, FV, I, J1, K, L, Reg, P2).
+
+% 8.  R∀ - Universal introduction (eigenvariable with LOCAL registry check)
+g4_proves(Gamma > Delta, FV, I, J, K, L, Reg, rall(Gamma>Delta, P)) :-
+    select((![_Z-X]:A), Delta, D1), !,
+    copy_term((X:A, FV), (f_sk(J, FV):A1, FV)),
+    % CHECK: f_sk must not be in the CURRENT BRANCH registry
+    \+ member_check(f_sk(J, FV), Reg),
+    % Add to registry for this branch
+    NewReg = [f_sk(J, FV)|Reg],
+    J1 is J+1,
+    g4_proves(Gamma > [A1|D1], FV, I, J1, K, L, NewReg, P).
+
+% 9.  L∀ - Universal elimination (Otten's limitation)
+g4_proves(Gamma > Delta, FV, I, J, K, L, Reg, lall(Gamma>Delta, P)) :-
+    member((![_Z-X]:A), Gamma),
+    \+ length(FV, I),
+    copy_term((X:A, FV), (Y:A1, FV)),
+    g4_proves([A1|Gamma] > Delta, [Y|FV], I, J, K, L, Reg, P).
+
+% 10. R→ - Right implication
+g4_proves(Gamma > Delta, FV, I, J, K, L, Reg, rcond(Gamma>Delta, P)) :-
+    Delta = [A=>B], !,
+    g4_proves([A|Gamma] > [B], FV, I, J, K, L, Reg, P).
+
+% 11. L→→ - Left implication-implication (G4 specific)
+g4_proves(Gamma > Delta, FV, I, J, K, L, Reg, ltoto(Gamma>Delta, P1, P2)) :-
+    select(((A=>B)=>C), Gamma, G1), !,
+    g4_proves([A, (B=>C)|G1] > [B], FV, I, J, J1, L, Reg, P1),
+    g4_proves([C|G1] > Delta, FV, I, J1, K, L, Reg, P2).
+
+% 12. L∃∨ - Combined existential-disjunction (G4 specific with groundness check)
+g4_proves(Gamma > Delta, FV, I, J, K, L, Reg, lex_lor(Gamma>Delta, P1, P2)) :-
+    select((?[_Z-X]:(A|B)), Gamma, G1), !,
+    ground(FV),
+    copy_term((X:(A|B), FV), (f_sk(J, FV):(A1|B1), FV)),
+    J1 is J+1,
+    g4_proves([A1|G1] > Delta, FV, I, J1, J2, L, Reg, P1),
+    g4_proves([B1|G1] > Delta, FV, I, J2, K, L, Reg, P2).
+
+% 13  R∨ - Right disjunction (CRITICAL: each branch gets its own registry copy)
+g4_proves(Gamma > Delta, FV, I, J, K, L, Reg, ror(Gamma>Delta, P)) :-
+    Delta = [(A|B)], !,
+    (   g4_proves(Gamma > [A], FV, I, J, K, L, Reg, P)
+    ;   g4_proves(Gamma > [B], FV, I, J, K, L, Reg, P)
+    ).
+
+% 14. R∧ - Right conjunction
+g4_proves(Gamma > Delta, FV, I, J, K, L, Reg, rand(Gamma>Delta, P1, P2)) :-
+    Delta = [(A&B)], !,
+    g4_proves(Gamma > [A], FV, I, J, J1, L, Reg, P1),
+    g4_proves(Gamma > [B], FV, I, J1, K, L, Reg, P2).
+
+
+% =========================================================================
+% QUANTIFIER RULES - WITH LOCAL REGISTRY
+% =========================================================================
+
+
+% 15. L∃ - Existential elimination (eigenvariable with LOCAL registry check)
+g4_proves(Gamma > Delta, FV, I, J, K, L, Reg, lex(Gamma>Delta, P)) :-
+    select((?[_Z-X]:A), Gamma, G1), !,
+    copy_term((X:A, FV), (f_sk(J, FV):A1, FV)),
+    % CHECK: f_sk must not be in the CURRENT BRANCH registry
+    \+ member_check(f_sk(J, FV), Reg),
+    % Add to registry for this branch
+    NewReg = [f_sk(J, FV)|Reg],
+    J1 is J+1,
+    g4_proves([A1|G1] > Delta, FV, I, J1, K, L, NewReg, P).
+
+% 16.  R∃ - Existential introduction (free variable)
+g4_proves(Gamma > Delta, FV, I, J, K, L, Reg, rex(Gamma>Delta, P)) :-
+    select((?[_Z-X]:A), Delta, D1), !,
+    \+ length(FV, I),
+    copy_term((X:A, FV), (Y:A1, FV)),
+    g4_proves(Gamma > [A1|D1], [Y|FV], I, J, K, L, Reg, P).
+
+% =========================================================================
+% QUANTIFIER CONVERSIONS (G4 specific - WITH FRESHNESS CONSTRAINTS)
+% =========================================================================
+
+% 17 . CQ_c - Classical quantifier conversion (with freshness constraint)
+g4_proves(Gamma > Delta, FV, I, J, K, classical, Reg, cq_c(Gamma>Delta, P)) :-
+    select((![Z-X]:A) => B, Gamma, G1),
+    \+ member_term(X, FV),
+    ( member((?[ZTarget-YTarget]: ATarget) => B, G1),
+      \+ \+ ((A => B) = ATarget) ->
+        g4_proves([?[ZTarget-YTarget]:ATarget|G1] > Delta, FV, I, J, K, classical, Reg, P)
+    ;
+        g4_proves([?[Z-X]:(A => B)|G1] > Delta, FV, I, J, K, classical, Reg, P)
+    ).
+
+% 18 . CQ_m - Minimal quantifier conversion (with freshness constraint)
+g4_proves(Gamma > Delta, FV, I, J, K, LogicLevel, Reg, cq_m(Gamma>Delta, P)) :-
     member(LogicLevel, [minimal, intuitionistic]),
     select((?[Z-X]:A)=>B, Gamma, G1),
-    g4mic_proves([![Z-X]:(A=>B)|G1]>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, P).
+    \+ member_term(X, FV),
+    g4_proves([![Z-X]:(A=>B)|G1] > Delta, FV, I, J, K, LogicLevel, Reg, P).
+
 % =========================================================================
 % EQUALITY RULES
 % =========================================================================
-% REFLEXIVITY: |- t = t
-g4mic_proves(_Gamma > Delta, _, _, SkolemIn, SkolemIn, _, eq_refl(Delta)) :-
+/*
+% Reflexivity
+g4_proves(_Gamma > Delta, _, _, J, J, _, _, eq_refl(Delta)) :-
     Delta = [T = T],
-    ground(T),
-    !.
+    ground(T), !.
 
-% SYMMETRY: t = u |- u = t
-g4mic_proves(Gamma > Delta, _, _, SkolemIn, SkolemIn, _, eq_sym(Gamma>Delta)) :-
+% Symmetry
+g4_proves(Gamma > Delta, _, _, J, J, _, _, eq_sym(Gamma>Delta)) :-
     Delta = [A = B],
-    member(B = A, Gamma),
-    !.
+    member(B = A, Gamma), !.
 
-% SIMPLE TRANSITIVITY: t = u, u = v |- t = v
-g4mic_proves(Gamma > Delta, _, _, SkolemIn, SkolemIn, _, eq_trans(Gamma>Delta)) :-
+% Transitivity
+g4_proves(Gamma > Delta, _, _, J, J, _, _, eq_trans(Gamma>Delta)) :-
     Delta = [A = C],
     A \== C,
     (   (member(A = B, Gamma), member(B = C, Gamma))
     ;   (member(B = A, Gamma), member(B = C, Gamma))
     ;   (member(A = B, Gamma), member(C = B, Gamma))
     ;   (member(B = A, Gamma), member(C = B, Gamma))
-    ),
-    !.
+    ), !.
 
-% CHAINED TRANSITIVITY: a=b, b=c, c=d |- a=d
-g4mic_proves(Gamma > Delta, _, _, SkolemIn, SkolemIn, _, eq_trans_chain(Gamma>Delta)) :-
+% Chained transitivity
+g4_proves(Gamma > Delta, _, _, J, J, _, _, eq_trans_chain(Gamma>Delta)) :-
     Delta = [A = C],
     A \== C,
     \+ member(A = C, Gamma),
     \+ member(C = A, Gamma),
-    find_equality_path(A, C, Gamma, [A], _Path),
-    !.
+    find_equality_path(A, C, Gamma, [A], _Path), !.
 
-% CONGRUENCE: t = u |- f(t) = f(u)
-g4mic_proves(Gamma > Delta, _, _, SkolemIn, SkolemIn, _, eq_cong(Gamma>Delta)) :-
+% Congruence
+g4_proves(Gamma > Delta, _, _, J, J, _, _, eq_cong(Gamma>Delta)) :-
     Delta = [LHS = RHS],
-    LHS =.. [F|ArgsL],
+    LHS =..  [F|ArgsL],
     RHS =.. [F|ArgsR],
-    length(ArgsL, N),
-    length(ArgsR, N),
-    N > 0,
+    length(ArgsL, N), length(ArgsR, N), N > 0,
     find_diff_pos(ArgsL, ArgsR, _Pos, TermL, TermR),
-    (member(TermL = TermR, Gamma) ; member(TermR = TermL, Gamma)),
-    !.
+    (member(TermL = TermR, Gamma) ; member(TermR = TermL, Gamma)), !.
 
-% SUBSTITUTION IN EQUALITY: x=y, f(x)=z |- f(y)=z
-g4mic_proves(Gamma > Delta, _, _, SkolemIn, SkolemIn, _, eq_subst_eq(Gamma>Delta)) :-
+% Substitution in equality
+g4_proves(Gamma > Delta, _, _, J, J, _, _, eq_subst_eq(Gamma>Delta)) :-
     Delta = [Goal_LHS = Goal_RHS],
     member(Ctx_LHS = Ctx_RHS, Gamma),
     Ctx_LHS \== Goal_LHS,
-    member(X = Y, Gamma),
-    X \== Y,
-    (
-        (substitute_in_term(X, Y, Ctx_LHS, Goal_LHS), Ctx_RHS == Goal_RHS)
+    member(X = Y, Gamma), X \== Y,
+    (   (substitute_in_term(X, Y, Ctx_LHS, Goal_LHS), Ctx_RHS == Goal_RHS)
     ;   (substitute_in_term(Y, X, Ctx_LHS, Goal_LHS), Ctx_RHS == Goal_RHS)
     ;   (substitute_in_term(X, Y, Ctx_RHS, Goal_RHS), Ctx_LHS == Goal_LHS)
     ;   (substitute_in_term(Y, X, Ctx_RHS, Goal_RHS), Ctx_LHS == Goal_LHS)
-    ),
-    !.
+    ), !.
 
-% SUBSTITUTION (Leibniz): t = u, P(t) |- P(u)
-g4mic_proves(Gamma > Delta, _, _, SkolemIn, SkolemIn, _, eq_subst(Gamma>Delta)) :-
+% Leibniz substitution
+g4_proves(Gamma > Delta, _, _, J, J, _, _, eq_subst(Gamma>Delta)) :-
     Delta = [Goal],
-    Goal \= (_ = _),
-    Goal \= (_ => _),
-    Goal \= (_ & _),
-    Goal \= (_ | _),
-    Goal \= (!_),
-    Goal \= (?_),
+    Goal \= (_ = _), Goal \= (_ => _), Goal \= (_ & _),
+    Goal \= (_ | _), Goal \= (!_), Goal \= (?_),
     member(A = B, Gamma),
     member(Pred, Gamma),
-    Pred \= (_ = _),
-    Pred \= (_ => _),
-    Pred \= (_ & _),
-    Pred \= (_ | _),
+    Pred \= (_ = _), Pred \= (_ => _), Pred \= (_ & _), Pred \= (_ | _),
     Pred =.. [PredName|Args],
     Goal =.. [PredName|GoalArgs],
     member_pos(A, Args, Pos),
-    nth0(Pos, GoalArgs, B),
-    !.
-
+    nth0(Pos, GoalArgs, B), ! .
+*/
 % =========================================================================
-% ANTISEQUENT - Only when explicitly enabled by driver (PASS 2)
+% ANTISEQUENT (only when enabled)
 % =========================================================================
-% This clause is ONLY activated after normal proof search fails
-% It represents a counter-model when no atom in Gamma is in Delta
-% Antisequent with empty Gamma: ⊬ B
-g4mic_proves([] > Delta, _, Threshold, SkolemIn, SkolemIn, classical, asq([] < Delta, _)) :-
-    nb_current(asq_enabled, true),
-    Threshold >= 5,
-    Delta = [B],
-    B \= asq,
-    B \= asq(_,_),
-    % No restriction on B's form - any invalid formula can generate an antisequent
-    !.
 
-% Antisequent with non-empty Gamma: Γ ⊬ B
-g4mic_proves(Gamma > Delta, _, Threshold, SkolemIn, SkolemIn, classical, asq(Gamma < Delta, _)) :-
+g4_proves([] > Delta, _, I, J, J, classical, _, asq([] < Delta, _)) :-
     nb_current(asq_enabled, true),
-    Threshold >= 5,
-    Gamma \= [],  % Gamma non-empty
+    I >= 5,
     Delta = [B],
-    B \= asq,
-    B \= asq(_,_),
+    B \= asq, B \= asq(_,_), !.
+
+g4_proves(Gamma > Delta, _, I, J, J, classical, _, asq(Gamma < Delta, _)) :-
+    nb_current(asq_enabled, true),
+    I >= 5,
+    Gamma \= [],
+    Delta = [B],
+    B \= asq, B \= asq(_,_),
     member(A, Gamma),
-    A \= asq,
-    A \= asq(_,_),
-    % No restriction on A's form - any atom or formula can be in Gamma
-    \+ member(A, Delta),
-    !.
+    A \= asq, A \= asq(_,_),
+    \+ member(A, Delta), !.
+
 % =========================================================================
 % HELPERS
 % =========================================================================
-% Helper: find position of an element
+% Helper: check if term is in registry (using =@= for structural equivalence)
+member_check(Term, [Elem|_]) :-
+    Term =@= Elem,
+    !.
+member_check(Term, [_|Rest]) :-
+    member_check(Term, Rest).
+
+
 member_pos(X, [X|_], 0) :- !.
 member_pos(X, [_|T], N) :-
     member_pos(X, T, N1),
     N is N1 + 1.
 
-% Helper: substitute Old with New in Term
 substitute_in_term(Old, New, Old, New) :- !.
 substitute_in_term(Old, New, Term, Result) :-
-    compound(Term),
-    !,
+    compound(Term), !,
     Term =.. [F|Args],
     maplist(substitute_in_term(Old, New), Args, NewArgs),
     Result =.. [F|NewArgs].
 substitute_in_term(_, _, Term, Term).
 
-% Helper: find position where two lists differ
 find_diff_pos([X|_], [Y|_], 0, X, Y) :- X \= Y, !.
 find_diff_pos([X|RestL], [X|RestR], Pos, TermL, TermR) :-
     find_diff_pos(RestL, RestR, Pos1, TermL, TermR),
     Pos is Pos1 + 1.
-
-% Helper: find a path (with cycle detection)
+/*
 find_equality_path(X, X, _, _, [X]) :- !.
 find_equality_path(X, Z, Context, Visited, [X|Path]) :-
     (member(X = Y, Context) ; member(Y = X, Context)),
     Y \== X,
     \+ member(Y, Visited),
     find_equality_path(Y, Z, Context, [Y|Visited], Path).
-
-% Helper: verify if Formula = not^n(Target) and return n
+*/
 is_nested_negation(Target, Target, 0) :- !.
 is_nested_negation((Inner => #), Target, N) :-
     is_nested_negation(Inner, Target, N1),
     N is N1 + 1.
 
-% =========================================================================
-% END of Prover
-% =========================================================================
+member_term(Term, List) :-
+    member(Element, List),
+    contains_term(Term, Element).
 
+contains_term(Term, Term) :- ! .
+contains_term(Term, Structure) :-
+    compound(Structure),
+    Structure =.. [_|Args],
+    member(Arg, Args),
+    contains_term(Term, Arg).
+
+% =========================================================================
+% END of Prover section
+% =========================================================================
 
 
 % =========================================================================

@@ -142,20 +142,20 @@ translate_formula(F, F_out) :-
 
 % Bottom/falsum: # is translated to ~(p0 => p0) which represents ⊥
 translate_operators(F, (~(p0 => p0))) :-
-    nonvar(F),
-    (F == '#' ; F == f ; F == bot ; F == bottom ; F == falsum),
+    nonvar(F), 
+    (F == '#' ; F == f ; F == bot ; F == bottom ; F == falsum), 
     !.
 
 % Top/verum: t is translated to (p0 => p0) which represents ⊤
 translate_operators(F, (p0 => p0)) :-
-    nonvar(F),
-    (F == t ; F == top ; F == verum),
+    nonvar(F), 
+    (F == t ; F == top ; F == verum), 
     !.
 
 % Atomic formulas (must come before compound terms check)
 translate_operators(F, F) :-
-    atomic(F),
-    \+ (F == '#'), \+ (F == f), \+ (F == bot),
+    atomic(F), 
+    \+ (F == '#'), \+ (F == f), \+ (F == bot), 
     \+ (F == t), \+ (F == top),
     !.
 
@@ -184,16 +184,16 @@ translate_operators(A <=> B, (A1 <=> B1)) :-
     !, translate_operators(A, A1), translate_operators(B, B1).
 
 % Universal quantifier with brackets: ![X]:F
-translate_operators(![Var]:A, (all RealVar:A1)) :-
+% Keep the ![X]: syntax - nanocop20_swi.pl will convert it to (all X:)
+translate_operators(![Var]:A, ![Var]:A1) :-
     !,
-    substitute_var_in_formula(A, Var, RealVar, A_subst),
-    translate_operators(A_subst, A1).
+    translate_operators(A, A1).
 
 % Existential quantifier with brackets: ?[X]:F
-translate_operators(?[Var]:A, (ex RealVar:A1)) :-
+% Keep the ?[X]: syntax - nanocop20_swi.pl will convert it to (ex X:)
+translate_operators(?[Var]:A, ?[Var]:A1) :-
     !,
-    substitute_var_in_formula(A, Var, RealVar, A_subst),
-    translate_operators(A_subst, A1).
+    translate_operators(A, A1).
 
 % Universal quantifier simple syntax: !X:F (alternative)
 translate_operators(!Var:A, (all VarUpper:A1)) :-
