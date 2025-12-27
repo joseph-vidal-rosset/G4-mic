@@ -662,8 +662,8 @@ provable_at_level(Sequent, constructive, P) :-
     for(Threshold, 0, MaxIter),
     Sequent = (Gamma > Delta),
     catch(
-        ( prove(Gamma > Delta, [], Threshold, 1, _, minimal, [], P) -> true
-        ; prove(Gamma > Delta, [], Threshold, 1, _, intuitionistic, [], P)
+        ( prove(Gamma > Delta, [], Threshold, 1, _, minimal, P) -> true
+        ; prove(Gamma > Delta, [], Threshold, 1, _, intuitionistic, P)
         ),
         error(occurs_check(_,_), _),
         (   % DEBUG: show that occurs_check was caught
@@ -680,7 +680,7 @@ provable_at_level(Sequent, LogicLevel, Proof) :-
     for(Threshold, 0, MaxIter),
     Sequent = (Gamma > Delta),
     catch(
-        prove(Gamma > Delta, [], Threshold, 1, _, LogicLevel, [], Proof),
+        prove(Gamma > Delta, [], Threshold, 1, _, LogicLevel, Proof),
         error(occurs_check(_,_), _),
         (   % DEBUG: show that occurs_check was caught
             % write('[DEBUG: occurs_check caught in non-classical]'), nl,
@@ -695,12 +695,12 @@ provable_at_level(Sequent, classical, Proof) :-
     logic_iteration_limit(classical, MaxIter),
     catch(
         (   for(Threshold, 0, MaxIter),
-            prove(Gamma > Delta, [], Threshold, 1, _, classical, [], Proof)
+            prove(Gamma > Delta, [], Threshold, 1, _, classical, Proof)
         ->  true
         ;   nb_setval(asq_enabled, true),
             once((
                 for(Threshold, 0, MaxIter),
-                prove(Gamma > Delta, [], Threshold, 1, _, classical, [], Proof)
+                prove(Gamma > Delta, [], Threshold, 1, _, classical, Proof)
             )),
             nb_setval(asq_enabled, false)
         ),
