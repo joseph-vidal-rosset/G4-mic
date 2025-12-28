@@ -22,7 +22,7 @@
 :- use_module(library(statistics)).
 :- use_module(library(terms)).
 :- ['o_g4mic_operators'].
-:- ['i_g4mic_prover_nanocop'].
+:- ['i_g4mic_prover_fixed'].
 :- ['ii_g4mic_sc-g4_printer'].
 :- ['iii_g4mic_common_nd_printing'].
 :- ['iv_g4mic_nd_flag_style_printer'].

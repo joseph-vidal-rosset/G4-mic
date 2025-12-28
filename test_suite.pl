@@ -183,7 +183,7 @@ map_time_out_result(R, success) :- R \= time_out, R \= failed, R \= success, !.
 % -------------------------------------------------------------------------
 :- multifile pelletier_tests/1.
 pelletier_tests([
-    'Pel_01_drinker' - (?[x]:(p(x) => ![y]:(p(y)))),
+    'Pel_01_drinker' - (?[y]:(d(y) => ![x]:(d(x)))),
     'Pel_02_dn_forall_exists' - ((~(![x]:p(x))) <=> (?[x]:(~p(x)))),
     'Pel_03_forall_inst' - ((![x]:p(x)) => p(a)),
     'Pel_04_forall_preserve_exist' - ((![x]:(p(x) => q(x))) => ((?[x]:p(x)) => ?[x]:q(x))),
@@ -191,7 +191,7 @@ pelletier_tests([
     'Pel_06_leibniz' - (((a = b) & p(a)) => p(b)),
     'Pel_07_eq_sym' - ((a = b) <=> (b = a)),
     'Pel_08_eq_trans' - (((a = b) & (b = c)) => (a = c)),
-    'Pel_09_quantifier_swap_failure' - ((![x]:(?[y]:r(x,y))) => ?[y]:(![x]:r(x,y))),
+    'Pel_09_quantifier_swap_failure' - (![x]:(?[y]:(r(x,y))) => ?[y]:(![x]:(r(x,y)))),
     'Pel_10_exist_forall_exchange' - ((?[y]:(![x]:p(x,y))) => (![x]:(?[y]:p(x,y)))),
     'Pel_11_existential_elim_schema' - ((?[x]:p(x)) => ((![x]:(p(x) => q)) => q)),
     'Pel_12_univ_distrib_impl' - ((![x]:(p(x) => q)) <=> ((?[x]:p(x)) => q)),

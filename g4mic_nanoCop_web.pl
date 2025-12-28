@@ -1,23 +1,38 @@
-% COMMON OPERATORS - Centralized module
-% To include in all prover modules
+% =========================================================================
+% OPERATOR DECLARATIONS - Unified for g4mic + nanoCop + TPTP
 % =========================================================================
 :- use_module(library(lists)).
 :- use_module(library(statistics)).
 :- use_module(library(terms)).
-
-:- catch([minimal_driver], _, true).
-
+% -------------------------------------------------------------------------
+% CORE LOGICAL OPERATORS (shared by all)
+% -------------------------------------------------------------------------
+:- op( 500, fy,  ~).              % negation
+:- op(1000, xfy, &).              % conjunction
+:- op(1100, xfy, '|').            % disjunction
+:- op(1110, xfy, =>).             % implication
+:- op(1130, xfy, <=>).            % biconditional (STANDARD: 1130)
+:- op( 500, xfy, :).              % quantifier separator
+% -------------------------------------------------------------------------
+% QUANTIFIERS - Dual syntax (TPTP + internal)
+% -------------------------------------------------------------------------
+:- op( 500, fy,  !).              % universal (TPTP): ![X]:
+:- op( 500, fy,  ?).              % existential (TPTP): ?[X]:
+:- op( 500, fy,  all).            % universal (internal): all X:
+:- op( 500, fy,  ex).             % existential (internal): ex X:
+% -------------------------------------------------------------------------
+% EXTENDED TPTP OPERATORS (from nanocop_tptp)
+% -------------------------------------------------------------------------
+:- op(1130, xfy, <~>).            % negated equivalence
+:- op(1110, xfy, <=).             % reverse implication
+:- op(1100, xfy, '~|').           % negated disjunction (NOR)
+:- op(1000, xfy, ~&).             % negated conjunction (NAND)
+% :- op( 400, xfx, =).              % equality
+:- op( 300, xf,  !).              % negated equality (for !=)
+:- op( 299, fx,  $).              % TPTP constants ($true/$false)
 % =========================================================================
-% TPTP OPERATORS (input syntax)
+% g4mic specific
 % =========================================================================
-:- op( 500, fy, ~).             % negation
-:- op(1000, xfy, &).            % conjunction
-:- op(1100, xfy, '|').          % disjunction
-:- op(1110, xfy, =>).           % conditional
-:- op(1120, xfy, <=>).          % biconditional
-:- op( 500, fy, !).             % universal quantifier:  ![X]:
-:- op( 500, fy, ?).             % existential quantifier:  ?[X]:
-:- op( 500, xfy, :).            % quantifier separator
 % Input syntax: sequent turnstile
 % Equivalence operator for sequents (bidirectional provability)
 :- op(800, xfx, <>).
@@ -52,18 +67,14 @@ show_banner :-
 
     write('╔═══════════════════════════════════════════════════════════════════╗'), nl,
     write('║                                                                   ║'), nl,
-    write('🎓🎓🎓🎓🎓🎓🎓 G4-mic First-Order Logic Prover v1.0 🎓🎓🎓🎓🎓🎓🎓🎓 '), nl,
-    write('🎓🎓🎓🎓🎓🎓(minimal, intuitionistic and classical logic)🎓🎓🎓🎓🎓🎓'), nl,
+    write('🎓🎓🎓  nanoCop 2.0 & G4-mic v1.0: First-Order Logic Provers   🎓🎓🎓 '), nl,
+    write('🎓🎓🎓🎓    (minimal, intuitionistic and classical logic)    🎓🎓🎓🎓'), nl,
     write('║                                                                   ║'), nl,
     write('╠═══════════════════════════════════════════════════════════════════╣'), nl,
     write('║                                                                   ║'), nl,
-    write('⚠️⚠️⚠️⚠️⚠️⚠️IMPORTANT: ALWAYS CHECK THE OUTPUT CAREFULLY! ⚠️⚠️⚠️⚠️⚠️ '), nl,
+    write('⚠️⚠️⚠️ IMPORTANT: ALWAYS CHECK YOUR INPUT & OUTPUT  CAREFULLY! ⚠️⚠️⚠️ '), nl,
     write('║                                                                   ║'), nl,
-    write('║   The prover ALWAYS returns a result:                             ║'), nl,
-    write('║     ✅  VALID formula    → provides a PROOF                       ║'), nl,
-    write('║     ❌  INVALID formula  → provides a REFUTATION                  ║'), nl,
-    write('║                                                                   ║'), nl,
-    write('║   Your formula MUST follow correct syntax (type help.)            ║'), nl,
+    write('║      Your formula MUST follow the correct syntax (type help.)     ║'), nl,
     write('║                                                                   ║'), nl,
     write('╠═══════════════════════════════════════════════════════════════════╣'), nl,
     write('║                                                                   ║'), nl,
@@ -71,6 +82,7 @@ show_banner :-
     write('║     • prove(Formula).        → proof in 3 styles + validation     ║'), nl,
     write('║     • g4mic_decides(Formula) → concise mode                       ║'), nl,
     write('║     • decide(Formula)        → alias for g4mic_decides            ║'), nl,
+    write('║     • nanoCop_decides(F)     → test Formula with nanoCop only     ║'), nl,
     write('║     • help.                  → show detailed help                 ║'), nl,
     write('║     • examples.              → show formula examples              ║'), nl,
     write('║                                                                   ║'), nl,
@@ -82,7 +94,7 @@ show_banner :-
 
 
 % =========================================================================
-% NANOCOP WRAPPER WITH EQUALITY SUPPORT
+% nanoCop
 % =========================================================================
 /*
 % nanoCop_decides/1 - Wrapper that handles equality axioms
@@ -115,23 +127,737 @@ contains_equality_symbol(ex _: F) :- !, contains_equality_symbol(F).
 contains_equality_symbol(_) :- fail.
 */
 
-% =========================================================================
-% ITERATION LIMITS CONFIGURATION
-% =========================================================================
+test_loading :-
+    format('=== DIAGNOSTIQUE nanoCoP ===~n'),
 
-logic_iteration_limit(constructive, 7).
-logic_iteration_limit(classical, 15).
-logic_iteration_limit(minimal, 6).
-logic_iteration_limit(intuitionistic, 7).
-logic_iteration_limit(fol, 15).
+    % Vérifier les fichiers
+    format('1. Vérification des fichiers:~n'),
+    Files = ['operators.pl', 'nanocop20_swi.pl', 'nanocop20.pl', 'nanocop_proof.pl'],
+    forall(member(F, Files),
+           (exists_file(F) ->
+              format('  ✓ ~w trouvé~n', [F]) ;
+              format('  ✗ ~w MANQUANT~n', [F]))),
 
+    % Tenter le chargement manuel
+    format('~nanoCop_deciden2. Tentative de chargement manuel:~n'),
+    (exists_file('nanocop20_swi.pl') ->
+        (format('  Chargement de nanocop20_swi.pl...~n'),
+         catch([nanocop20_swi], E, (format('  ERREUR: ~w~n', [E]), fail))) ;
+     exists_file('nanocop20.pl') ->
+        (format('  Chargement de nanocop20.pl...~n'),
+         catch([nanocop20], E, (format('  ERREUR: ~w~n', [E]), fail))) ;
+        format('  Aucun fichier nanoCoP trouvé!~n')
+    ),
+
+    % Vérifier les prédicats
+    format('~n3. Vérification des prédicats:~n'),
+    Preds = [prove/2, prove2/3, bmatrix/3],
+    forall(member(P, Preds),
+           (current_predicate(P) ->
+              format('  ✓ ~w disponible~n', [P]) ;
+              format('  ✗ ~w MANQUANT~n', [P]))),
+
+    % Test simple si possible
+    format('~n4. Test simple:~n'),
+    (current_predicate(prove/2) ->
+        (format('  Test de prove(p, Proof)...~n'),
+         (prove(p, _) ->
+            format('  ✓ Test réussi~n') ;
+            format('  ✗ Test échoué (normal pour ~p)~n', [p]))) ;
+        format('  Impossible: prove/2 non disponible~n')
+    ),
+
+    format('~n=== FIN DIAGNOSTIQUE ===~n').
+
+% Test rapide
+quick_test :-
+    [operators],
+    format('Operators chargé~n'),
+    (exists_file('nanocop20_swi.pl') ->
+        ([nanocop20_swi], format('nanocop20_swi chargé~n')) ;
+        format('nanocop20_swi non trouvé~n')),
+    (current_predicate(prove/2) ->
+        format('prove/2 disponible~n') ;
+        format('prove/2 NON disponible~n')).
+
+%% File: nanocop20_swi.pl  -  Version: 2.0  -  Date: 1 May 2021
+%%
+%% Purpose: nanoCoP: A Non-clausal Connection Prover
+%%
+%% Author:  Jens Otten
+%% Web:     www.leancop.de/nanocop/
+%%
+%% Usage:   prove(F,P).  % where F is a first-order formula, e.g.
+%%                       %  F=((p,all X:(p=>q(X)))=>all Y:q(Y))
+%%                       %  and P is the returned connection proof
+%%
+%% Copyright: (c) 2016-2021 by Jens Otten
+%% License:   GNU General Public License
+
+:- set_prolog_flag(occurs_check,true).  % global occurs check on
+
+:- dynamic(pathlim/0), dynamic(lit/4).
+
+% definitions of logical connectives and quantifiers
+
+% :- op(1130,xfy,<=>). :- op(1110,xfy,=>). :- op(500, fy,'~').
+% :- op( 500, fy,all). :- op( 500, fy,ex). :- op(500,xfy,:).
+
+% :- [operators].
+% -----------------------------------------------------------------
+% prove(F,Proof) - prove formula F
+
+prove(F,Proof) :- prove2(F,[cut,comp(7)],Proof).
+
+prove2(F,Set,Proof) :-
+    bmatrix(F,Set,Mat), retractall(lit(_,_,_,_)),
+    assert_matrix(Mat), prove(Mat,1,Set,Proof).
+
+% start rule
+prove(Mat,PathLim,Set,[(I^0)^V:Proof]) :-
+    ( member(scut,Set) -> ( append([(I^0)^V:Cla1|_],[!|_],Mat) ;
+        member((I^0)^V:Cla,Mat), positiveC(Cla,Cla1) ) -> true ;
+        ( append(MatC,[!|_],Mat) -> member((I^0)^V:Cla1,MatC) ;
+        member((I^0)^V:Cla,Mat), positiveC(Cla,Cla1) ) ),
+    prove(Cla1,Mat,[],[I^0],PathLim,[],Set,Proof).
+
+prove(Mat,PathLim,Set,Proof) :-
+    retract(pathlim) ->
+    ( member(comp(PathLim),Set) -> prove(Mat,1,[],Proof) ;
+      PathLim1 is PathLim+1, prove(Mat,PathLim1,Set,Proof) ) ;
+    member(comp(_),Set) -> prove(Mat,1,[],Proof).
+
+% axiom
+prove([],_,_,_,_,_,_,[]).
+
+% decomposition rule
+prove([J:Mat1|Cla],MI,Path,PI,PathLim,Lem,Set,Proof) :-
+    !, member(I^V:Cla1,Mat1),
+    prove(Cla1,MI,Path,[I,J|PI],PathLim,Lem,Set,Proof1),
+    prove(Cla,MI,Path,PI,PathLim,Lem,Set,Proof2),
+    Proof=[J:I^V:Proof1|Proof2].
+
+% reduction and extension rules
+prove([Lit|Cla],MI,Path,PI,PathLim,Lem,Set,Proof) :-
+    Proof=[Lit,I^V:[NegLit|Proof1]|Proof2],
+    \+ (member(LitC,[Lit|Cla]), member(LitP,Path), LitC==LitP),
+    (-NegLit=Lit;-Lit=NegLit) ->
+       ( member(LitL,Lem), Lit==LitL, _ClaB1=[], Proof1=[],I=l,V=[]
+         ;
+         member(NegL,Path), unify_with_occurs_check(NegL,NegLit),
+         _ClaB1=[], Proof1=[],I=r,V=[]
+         ;
+         lit(NegLit,ClaB,Cla1,Grnd1),
+         ( Grnd1=g -> true ; length(Path,K), K<PathLim -> true ;
+           \+ pathlim -> assert(pathlim), fail ),
+         prove_ec(ClaB,Cla1,MI,PI,I^V:ClaB1,MI1),
+         prove(ClaB1,MI1,[Lit|Path],[I|PI],PathLim,Lem,Set,Proof1)
+       ),
+       ( member(cut,Set) -> ! ; true ),
+       prove(Cla,MI,Path,PI,PathLim,[Lit|Lem],Set,Proof2).
+
+% extension clause (e-clause)
+prove_ec((I^K)^V:ClaB,IV:Cla,MI,PI,ClaB1,MI1) :-
+    append(MIA,[(I^K1)^V1:Cla1|MIB],MI), length(PI,K),
+    ( ClaB=[J^K:[ClaB2]|_], member(J^K1,PI),
+      unify_with_occurs_check(V,V1), Cla=[_:[Cla2|_]|_],
+      append(ClaD,[J^K1:MI2|ClaE],Cla1),
+      prove_ec(ClaB2,Cla2,MI2,PI,ClaB1,MI3),
+      append(ClaD,[J^K1:MI3|ClaE],Cla3),
+      append(MIA,[(I^K1)^V1:Cla3|MIB],MI1)
+      ;
+      (\+member(I^K1,PI);V\==V1) ->
+      ClaB1=(I^K)^V:ClaB, append(MIA,[IV:Cla|MIB],MI1) ).
+
+% -----------------------------------------------------------------
+% positiveC(Clause,ClausePos) - generate positive start clause
+
+positiveC([],[]).
+positiveC([M|C],[M3|C2]) :-
+    ( M=I:M1 -> positiveM(M1,M2),M2\=[],M3=I:M2 ; -_\=M,M3=M ),
+    positiveC(C,C2).
+
+positiveM([],[]).
+positiveM([I:C|M],M1) :-
+    ( positiveC(C,C1) -> M1=[I:C1|M2] ; M1=M2 ), positiveM(M,M2).
+
+% -----------------------------------------------------------------
+% bmatrix(Formula,Set,Matrix) - generate indexed matrix
+
+bmatrix(F,Set,M) :-
+    univar(F,[],F1),
+    ( member(conj,Set), F1=(A=>C) ->
+        bmatrix(A,1,MA,[],[],_,1,J,_),
+        bmatrix(C,0,MC,[],[],_,J,_,_), ( member(reo(I),Set) ->
+        reorderC([MA],[_:MA1],I), reorderC([MC],[_:MC1],I) ;
+        _:MA1=MA, _:MC1=MC ), append(MC1,[!|MA1],M)
+      ; bmatrix(F1,0,M1,[],[],_,1,_,_), ( member(reo(I),Set) ->
+        reorderC([M1],[_:M],I) ; _:M=M1 ) ).
+
+%% Ajout
+bmatrix(![X]:F1, Pol, M, FreeV, FV, Paths, I, I1, K) :- !,
+    bmatrix(all X:F1, Pol, M, FreeV, FV, Paths, I, I1, K).
+
+bmatrix(?[X]:F1, Pol, M, FreeV, FV, Paths, I, I1, K) :- !,
+    bmatrix(ex X:F1, Pol, M, FreeV, FV, Paths, I, I1, K).
+%%% fin de l'ajout
+
+bmatrix((F1<=>F2),Pol,M,FreeV,FV,Paths,I,I1,K) :- !,
+    bmatrix(((F1=>F2),(F2=>F1)),Pol,M,FreeV,FV,Paths,I,I1,K).
+
+bmatrix((~F),Pol,M,FreeV,FV,Paths,I,I1,K) :- !,
+    Pol1 is (1-Pol), bmatrix(F,Pol1,M,FreeV,FV,Paths,I,I1,K).
+
+bmatrix(F,Pol,M,FreeV,FV,Paths,I,I1,K) :-
+    F=..[C,X:F1], bma(uni,C,Pol), !,
+    bmatrix(F1,Pol,M,FreeV,[X|FV],Paths,I,I1,K).
+
+bmatrix(F,Pol,M,FreeV,FV,Paths,I,I1,K) :-
+    F=..[C,X:F1], bma(exist,C,Pol), !,
+    append(FreeV,FV,FreeV1), I2 is I+1,
+    copy_term((X,F1,FreeV1),((I^FreeV1),F2,FreeV1)),
+    bmatrix(F2,Pol,M,FreeV,FV,Paths,I2,I1,K).
+
+bmatrix(F,Pol,J^K:M3,FreeV,FV,Paths,I,I1,K) :-
+    F=..[C,F1,F2], bma(alpha,C,Pol,Pol1,Pol2), !,
+    bmatrix(F1,Pol1,J^K:M1,FreeV,FV,Paths1,I,I2,K),
+    bmatrix(F2,Pol2,_:M2,FreeV,FV,Paths2,I2,I1,K),
+    Paths is Paths1*Paths2,
+    (Paths1>Paths2 -> append(M2,M1,M3) ; append(M1,M2,M3)).
+
+bmatrix(F,Pol,I^K:[(I2^K)^FV1:C3],FreeV,FV,Paths,I,I1,K) :-
+    F=..[C,F1,F2], bma(beta,C,Pol,Pol1,Pol2), !,
+    ( FV=[] -> FV1=FV, F3=F1, F4=F2 ;
+      copy_term((FV,F1,F2,FreeV),(FV1,F3,F4,FreeV)) ),
+    append(FreeV,FV1,FreeV1),  I2 is I+1, I3 is I+2,
+    bmatrix(F3,Pol1,M1,FreeV1,[],Paths1,I3,I4,K),
+    bmatrix(F4,Pol2,M2,FreeV1,[],Paths2,I4,I1,K),
+    Paths is Paths1+Paths2,
+    ( (M1=_:[_^[]:C1];[M1]=C1), (M2=_:[_^[]:C2];[M2]=C2) ->
+      (Paths1>Paths2 -> append(C2,C1,C3) ; append(C1,C2,C3)) ).
+
+bmatrix(A,0,I^K:[(I2^K)^FV1:[A1]],FreeV,FV,1,I,I1,K)  :-
+    copy_term((FV,A,FreeV),(FV1,A1,FreeV)), I2 is I+1, I1 is I+2.
+
+bmatrix(A,1,I^K:[(I2^K)^FV1:[-A1]],FreeV,FV,1,I,I1,K) :-
+    copy_term((FV,A,FreeV),(FV1,A1,FreeV)), I2 is I+1, I1 is I+2.
+
+bma(alpha,',',1,1,1). bma(alpha,(;),0,0,0). bma(alpha,(=>),0,1,0).
+bma(beta,',',0,0,0).  bma(beta,(;),1,1,1).  bma(beta,(=>),1,0,1).
+bma(exist,all,0). bma(exist,ex,1). bma(uni,all,1). bma(uni,ex,0).
+
+% -----------------------------------------------------------------
+% assert_matrix(Matrix) - write matrix into Prolog's database
+
+assert_matrix(M) :-
+    member(IV:C,M), assert_clauses(C,IV:ClaB,ClaB,IV:ClaC,ClaC).
+assert_matrix(_).
+
+assert_clauses(C,ClaB,ClaB1,ClaC,ClaC1) :- !,
+    append(ClaD,[M|ClaE],C),
+    ( M=J:Mat -> append(MatA,[IV:Cla|MatB],Mat),
+                 append([J:[IV:ClaB2]|ClaD],ClaE,ClaB1),
+                 append([IV:ClaC2|MatA],MatB,Mat1),
+                 append([J:Mat1|ClaD],ClaE,ClaC1),
+                 assert_clauses(Cla,ClaB,ClaB2,ClaC,ClaC2)
+               ; append(ClaD,ClaE,ClaB1), ClaC1=C,
+                 (ground(C) -> Grnd=g ; Grnd=n),
+                 assert(lit(M,ClaB,ClaC,Grnd)), fail ).
+
+% -----------------------------------------------------------------
+%  reorderC([Matrix],[MatrixReo],I) - reorder clauses
+
+reorderC([],[],_).
+reorderC([M|C],[M1|C1],I) :-
+    ( M=J:M2 -> reorderM(M2,M3,I), length(M2,L), K is I mod (L*L),
+      mreord(M3,M4,K), M1=J:M4 ; M1=M ), reorderC(C,C1,I).
+
+reorderM([],[],_).
+reorderM([J:C|M],[J:D|M1],I) :- reorderC(C,D,I), reorderM(M,M1,I).
+
+mreord(M,M,0) :- !.
+mreord(M,M1,I) :-
+    mreord1(M,I,X,Y), append(Y,X,M2), I1 is I-1, mreord(M2,M1,I1).
+
+mreord1([],_,[],[]).
+mreord1([C|M],A,M1,M2) :-
+    B is 67*A, I is B rem 101, I1 is I mod 2,
+    ( I1=1 -> M1=[C|X], M2=Y ; M1=X, M2=[C|Y] ), mreord1(M,I,X,Y).
+
+% ----------------------------
+% create unique variable names
+
+univar(X,_,X)  :- (atomic(X);var(X);X==[[]]), !.
+univar(F,Q,F1) :-
+    F=..[A,B|T], ( (A=ex;A=all),B=X:C -> delete2(Q,X,Q1),
+    copy_term((X,C,Q1),(Y,D,Q1)), univar(D,[Y|Q],E), F1=..[A,Y:E] ;
+    univar(B,Q,B1), univar(T,Q,T1), F1=..[A,B1|T1] ).
+
+% delete variable from list
+delete2([],_,[]).
+delete2([X|T],Y,T1) :- X==Y, !, delete2(T,Y,T1).
+delete2([X|T],Y,[X|T1]) :- delete2(T,Y,T1).
+
+%% File: nanocop_tptp2.pl  -  Version: 1.0  -  Date: 16 January 2016
+%%
+%% Purpose: 1. Translate formula from TPTP into leanCoP syntax
+%%          2. Add equality axioms to the given formula
+%%
+%% Author:  Jens Otten
+%% Web:     www.leancop.de/nanocop/
+%%
+%% Usage: leancop_tptp2(X,F). % where X is a problem file using TPTP
+%%                            %  syntax and F the translated formula
+%%        leancop_equal(F,G). % where F is a formula and G the
+%%                            %  formula with added equality axioms
+%%
+%% Copyright: (c) 2009-2016 by Jens Otten
+%% License:   GNU General Public License
+
+
+% definitions of logical connectives and quantifiers
+
+% leanCoP syntax
 /*
-logic_iteration_limit(constructive, 3).
-logic_iteration_limit(classical, 15).
-logic_iteration_limit(minimal, 3).
-logic_iteration_limit(intuitionistic, 5).
-logic_iteration_limit(fol, 15).
+:- op(1130, xfy, <=>). % equivalence
+:- op(1110, xfy, =>).  % implication
+%                      % disjunction (;)
+%                      % conjunction (,)
+:- op( 500, fy, ~).    % negation
+:- op( 500, fy, all).  % universal quantifier
+:- op( 500, fy, ex).   % existential quantifier
+:- op( 500,xfy, :).
+
+% TPTP syntax
+:- op(1130, xfy, <~>).  % negated equivalence
+:- op(1110, xfy, <=).   % implication
+:- op(1100, xfy, '|').  % disjunction
+:- op(1100, xfy, '~|'). % negated disjunction
+:- op(1000, xfy, &).    % conjunction
+:- op(1000, xfy, ~&).   % negated conjunction
+:- op( 500, fy, !).     % universal quantifier
+:- op( 500, fy, ?).     % existential quantifier
+:- op( 400, xfx, =).    % equality
+:- op( 300, xf, !).     % negated equality (for !=)
+:- op( 299, fx, $).     % for $true/$false
 */
+% TPTP syntax to leanCoP syntax mapping
+
+op_tptp2((A<=>B),(A1<=>B1),   [A,B],[A1,B1]).
+op_tptp2((A<~>B),~((A1<=>B1)),[A,B],[A1,B1]).
+op_tptp2((A=>B),(A1=>B1),     [A,B],[A1,B1]).
+op_tptp2((A<=B),(B1=>A1),     [A,B],[A1,B1]).
+op_tptp2((A|B),(A1;B1),       [A,B],[A1,B1]).
+op_tptp2((A'~|'B),~((A1;B1)), [A,B],[A1,B1]).
+op_tptp2((A&B),(A1,B1),       [A,B],[A1,B1]).
+op_tptp2((A~&B),~((A1,B1)),   [A,B],[A1,B1]).
+op_tptp2(~A,~A1,[A],[A1]).
+op_tptp2((! [V]:A),(all V:A1),     [A],[A1]).
+op_tptp2((! [V|Vars]:A),(all V:A1),[! Vars:A],[A1]).
+op_tptp2((? [V]:A),(ex V:A1),      [A],[A1]).
+op_tptp2((? [V|Vars]:A),(ex V:A1), [? Vars:A],[A1]).
+op_tptp2($true,(true___=>true___),      [],[]).
+op_tptp2($false,(false___ , ~ false___),[],[]).
+op_tptp2(A=B,~(A1=B),[],[]) :- \+var(A), A=(A1!).
+op_tptp2(P,P,[],[]).
+
+%%% translate into leanCoP syntax
+
+leancop_tptp2(File,F) :- leancop_tptp2(File,'',[_],F,_).
+
+leancop_tptp2(File,AxPath,AxNames,F,Con) :-
+    open(File,read,Stream), ( fof2cop(Stream,AxPath,AxNames,A,Con)
+    -> close(Stream) ; close(Stream), fail ),
+    ( Con=[] -> F=A ; A=[] -> F=Con ; F=(A=>Con) ).
+
+fof2cop(Stream,AxPath,AxNames,F,Con) :-
+    read(Stream,Term),
+    ( Term=end_of_file -> F=[], Con=[] ;
+      ( Term=..[fof,Name,Type,Fml|_] ->
+        ( \+member(Name,AxNames) -> true ; fml2cop([Fml],[Fml1]) ),
+        ( Type=conjecture -> Con=Fml1 ; Con=Con1 ) ;
+        ( Term=include(File), AxNames2=[_] ;
+          Term=include(File,AxNames2) ) -> name(AxPath,AL),
+          name(File,FL), append(AL,FL,AxL), name(AxFile,AxL),
+          leancop_tptp2(AxFile,'',AxNames2,Fml1,_), Con=Con1
+      ), fof2cop(Stream,AxPath,AxNames,F1,Con1),
+      ( Term=..[fof,N,Type|_], (Type=conjecture;\+member(N,AxNames))
+      -> (F1=[] -> F=[] ; F=F1) ; (F1=[] -> F=Fml1 ; F=(Fml1,F1)) )
+    ).
+
+fml2cop([],[]).
+fml2cop([F|Fml],[F1|Fml1]) :-
+    op_tptp2(F,F1,FL,FL1) -> fml2cop(FL,FL1), fml2cop(Fml,Fml1).
+
+
+%%% add equality axioms
+
+leancop_equal(F,F1) :-
+    collect_predfunc([F],PL,FL), append(PL2,[(=,2)|PL3],PL),
+    append(PL2,PL3,PL1) -> basic_equal_axioms(F0),
+    subst_pred_axioms(PL1,F2), (F2=[] -> F3=F0 ; F3=(F0,F2)),
+    subst_func_axioms(FL,F4), (F4=[] -> F5=F3 ; F5=(F3,F4)),
+    ( F=(A=>C) -> F1=((F5,A)=>C) ; F1=(F5=>F) ) ; F1=F.
+
+basic_equal_axioms(F) :-
+    F=(( all X:(X=X) ),
+       ( all X:all Y:((X=Y)=>(Y=X)) ),
+       ( all X:all Y:all Z:(((X=Y),(Y=Z))=>(X=Z)) )).
+
+% generate substitution axioms
+
+subst_pred_axioms([],[]).
+subst_pred_axioms([(P,I)|PL],F) :-
+    subst_axiom(A,B,C,D,E,I), subst_pred_axioms(PL,F1), P1=..[P|C],
+    P2=..[P|D], E=(B,P1=>P2), ( F1=[] -> F=A ; F=(A,F1) ).
+
+subst_func_axioms([],[]).
+subst_func_axioms([(P,I)|FL],F) :-
+    subst_axiom(A,B,C,D,E,I), subst_func_axioms(FL,F1), P1=..[P|C],
+    P2=..[P|D], E=(B=>(P1=P2)), ( F1=[] -> F=A ; F=(A,F1) ).
+
+subst_axiom((all X:all Y:E),(X=Y),[X],[Y],E,1).
+subst_axiom(A,B,[X|C],[Y|D],E,I) :-
+    I>1, I1 is I-1, subst_axiom(A1,B1,C,D,E,I1),
+    A=(all X:all Y:A1), B=((X=Y),B1).
+
+% collect predicate & function symbols
+
+collect_predfunc([],[],[]).
+collect_predfunc([F|Fml],PL,FL) :-
+    ( ( F=..[<=>|F1] ; F=..[=>|F1] ; F=..[;|F1] ; F=..[','|F1] ;
+        F=..[~|F1] ; (F=..[all,_:F2] ; F=..[ex,_:F2]), F1=[F2] ) ->
+      collect_predfunc(F1,PL1,FL1) ; F=..[P|Arg], length(Arg,I),
+      I>0 ->  PL1=[(P,I)], collect_func(Arg,FL1) ; PL1=[], FL1=[] ),
+    collect_predfunc(Fml,PL2,FL2),
+    union1(PL1,PL2,PL), union1(FL1,FL2,FL).
+
+collect_func([],[]).
+collect_func([F|FunL],FL) :-
+    ( \+var(F), F=..[F1|Arg], length(Arg,I), I>0 ->
+      collect_func(Arg,FL1), union1([(F1,I)],FL1,FL2) ; FL2=[] ),
+    collect_func(FunL,FL3), union1(FL2,FL3,FL).
+
+union1([],L,L).
+union1([H|L1],L2,L3) :- member(H,L2), !, union1(L1,L2,L3).
+union1([H|L1],L2,[H|L3]) :- union1(L1,L2,L3).
+%%% End of nanocop_tptp
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% File: minimal_driver.pl  -  Version: 2.3
+%%
+%% Purpose: Minimal interface for nanoCoP with automatic equality support
+%% Usage:   nanoCop_decides(Formula).
+%%
+%% Author: Joseph Vidal-Rosset
+%% Based on: nanoCoP by Jens Otten
+%% Fix: Added proper translation for # (bottom/falsum)
+%% Fix v2.3: Isolated occurs_check flag to prevent interference with g4mic
+% =========================================================================
+% =========================================================================
+% LOADING REQUIRED MODULES
+% =========================================================================
+/*
+% :- catch([operators], _, true).
+:- catch([system_check], _, true).
+
+% Load nanoCoP core
+:- catch([nanocop20_swi], _,
+    % catch([nanocop20], _,
+        format('WARNING: nanoCoP core not found!~n')).
+
+
+% CRITICAL: Load nanocop_tptp2 for equality axioms
+:- catch([nanocop_tptp2], _,
+    format('WARNING: nanocop_tptp2 not found - equality support disabled!~n')).
+*/
+% =========================================================================
+% MAIN INTERFACE with EQUALITY SUPPORT and FLAG ISOLATION
+% =========================================================================
+%% nanoCop_decides(+Formula) - Prove formula with automatic equality axioms
+%%
+%% CRITICAL: This predicate manages occurs_check flag:
+%% - nanoCop requires occurs_check=true (set by its module load)
+%% - g4mic requires occurs_check=false (default Prolog behavior)
+%% - We force false during setup, restore to true only during nanoCop call
+nanoCop_decides(Formula) :-
+    % Save current state (will be true if nanoCop module is loaded)
+    current_prolog_flag(occurs_check, OriginalOccursCheck),
+
+    % CRITICAL: Force occurs_check=false IMMEDIATELY for formula processing
+    % This ensures translation and preprocessing happen with correct flag
+    set_prolog_flag(occurs_check, false),
+
+    % Use setup_call_cleanup to guarantee proper flag management
+    setup_call_cleanup(
+        % Setup: Set occurs_check=true for nanoCop
+        set_prolog_flag(occurs_check, true),
+        % Call: execute nanoCop proof
+        nanocop_prove_core(Formula),
+        % Cleanup: Restore to false (g4mic-safe state)
+        set_prolog_flag(occurs_check, false)
+    ),
+
+    % Final cleanup: restore original state
+    set_prolog_flag(occurs_check, OriginalOccursCheck).
+
+%% nanocop_prove_core(+Formula) - Core nanoCop logic
+%% Assumes occurs_check=true is already set
+nanocop_prove_core(Formula) :-
+    % Step 1: Detect equality BEFORE translation
+    (nanocop_contains_equality(Formula) ->
+        HasEquality = true
+    ;
+        HasEquality = false
+    ),
+
+    % Step 2: Translate formula (![X]:  → all X:)
+    translate_formula(Formula, InternalFormula),
+
+    % Step 3: Add equality axioms AFTER translation (if needed)
+    (HasEquality = true ->
+        (current_predicate(leancop_equal/2) ->
+            leancop_equal(InternalFormula, TempFormula),
+            (InternalFormula \= TempFormula ->
+                format('~n[Equality detected - axioms added by leancop_equal]~n'),
+                FormulaWithEq = TempFormula
+            ;
+                format('~n[Equality detected - using basic axioms (leancop_equal failed)]~n'),
+                basic_equality_axioms(EqAxioms),
+                FormulaWithEq = (EqAxioms => InternalFormula)
+            )
+        ;
+            format('~n[Equality detected - using basic axioms]~n'),
+            basic_equality_axioms(EqAxioms),
+            FormulaWithEq = (EqAxioms => InternalFormula)
+        )
+    ;
+        FormulaWithEq = InternalFormula
+    ),
+
+    % Step 4: Prove (occurs_check is true here)
+    time(prove2(FormulaWithEq, [cut,comp(7)], _Proof)),
+    !.
+
+% =========================================================================
+% INTERNAL NANOCOP LOGIC (isolated from flag pollution)
+% =========================================================================
+%% nanocop_prove_isolated(+Formula) - Internal predicate with nanoCop logic
+nanocop_prove_isolated(Formula) :-
+    % Step 1: Detect equality BEFORE translation
+    (nanocop_contains_equality(Formula) ->
+        HasEquality = true
+    ;
+        HasEquality = false
+    ),
+
+    % Step 2: Translate formula (![X]:  → all X:)
+    translate_formula(Formula, InternalFormula),
+
+    % Step 3: Add equality axioms AFTER translation (if needed)
+    (HasEquality = true ->
+        (current_predicate(leancop_equal/2) ->
+            % Try leancop_equal first
+            leancop_equal(InternalFormula, TempFormula),
+            % Check if axioms were actually added
+            (InternalFormula \= TempFormula ->
+                format('~n[Equality detected - axioms added by leancop_equal]~n'),
+                FormulaWithEq = TempFormula
+            ;
+                % Fallback:  leancop_equal failed, use basic axioms
+                format('~n[Equality detected - using basic axioms (leancop_equal failed)]~n'),
+                basic_equality_axioms(EqAxioms),
+                FormulaWithEq = (EqAxioms => InternalFormula)
+            )
+        ;
+            % leancop_equal not available
+            format('~n[Equality detected - using basic axioms]~n'),
+            basic_equality_axioms(EqAxioms),
+            FormulaWithEq = (EqAxioms => InternalFormula)
+        )
+    ;
+        % No equality detected
+        FormulaWithEq = InternalFormula
+    ),
+
+    % Step 4: Prove (occurs_check is already true from nanoCop module load)
+    time(prove2(FormulaWithEq, [cut,comp(7)], _Proof)),
+    !.
+
+% =========================================================================
+% EQUALITY DETECTION
+% =========================================================================
+
+nanocop_contains_equality((_ = _)) :- !.
+
+nanocop_contains_equality(~A) :- !,
+    nanocop_contains_equality(A).
+
+nanocop_contains_equality(A & B) :- !,
+    (nanocop_contains_equality(A) ; nanocop_contains_equality(B)).
+
+nanocop_contains_equality(A | B) :- !,
+    (nanocop_contains_equality(A) ; nanocop_contains_equality(B)).
+
+nanocop_contains_equality(A => B) :- !,
+    (nanocop_contains_equality(A) ; nanocop_contains_equality(B)).
+
+nanocop_contains_equality(A <=> B) :- !,
+    (nanocop_contains_equality(A) ; nanocop_contains_equality(B)).
+
+nanocop_contains_equality(![_]: A) :- !,
+    nanocop_contains_equality(A).
+
+nanocop_contains_equality(? [_]:A) :- !,
+    nanocop_contains_equality(A).
+
+nanocop_contains_equality(all _:A) :- !,
+    nanocop_contains_equality(A).
+
+nanocop_contains_equality(ex _:A) :- !,
+    nanocop_contains_equality(A).
+
+% Compound terms (check arguments recursively)
+nanocop_contains_equality(Term) :-
+    compound(Term),
+    Term =.. [_|Args],
+    member(Arg, Args),
+    nanocop_contains_equality(Arg), !.
+
+% Base case: no equality
+nanocop_contains_equality(_) :- fail.
+
+% =========================================================================
+% BASIC EQUALITY AXIOMS
+% =========================================================================
+
+%% basic_equality_axioms(-Axioms)
+%% The three fundamental equality axioms
+basic_equality_axioms((
+    (all X:(X=X)),                                      % Reflexivity
+    (all X:all Y:((X=Y)=>(Y=X))),                      % Symmetry
+    (all X:all Y:all Z:(((X=Y),(Y=Z))=>(X=Z)))         % Transitivity
+)).
+
+% =========================================================================
+% FORMULA TRANSLATION
+% =========================================================================
+
+%% translate_formula(+InputFormula, -OutputFormula)
+%% Translates from TPTP syntax to nanoCoP internal syntax
+translate_formula(F, F_out) :-
+    translate_operators(F, F_out).
+
+% =========================================================================
+% OPERATOR TRANSLATION
+% =========================================================================
+% CRITICAL: Handle # (bottom/falsum) - must come FIRST before compound terms
+
+% Bottom/falsum: # is translated to ~(p0 => p0) which represents ⊥
+translate_operators(F, (~(p0 => p0))) :-
+    nonvar(F),
+    (F == '#' ; F == f ; F == bot ; F == bottom ; F == falsum),
+    !.
+
+% Top/verum: t is translated to (p0 => p0) which represents ⊤
+translate_operators(F, (p0 => p0)) :-
+    nonvar(F),
+    (F == t ; F == top ; F == verum),
+    !.
+
+% Atomic formulas (must come before compound terms check)
+translate_operators(F, F) :-
+    atomic(F),
+    \+ (F == '#'), \+ (F == f), \+ (F == bot),
+    \+ (F == t), \+ (F == top),
+    !.
+
+% Variables
+translate_operators(F, F) :-
+    var(F), !.
+
+% Negation
+translate_operators(~A, (~A1)) :-
+    !, translate_operators(A, A1).
+
+% Disjunction
+translate_operators(A | B, (A1 ; B1)) :-
+    !, translate_operators(A, A1), translate_operators(B, B1).
+
+% Conjunction
+translate_operators(A & B, (A1 , B1)) :-
+    !, translate_operators(A, A1), translate_operators(B, B1).
+
+% Implication
+translate_operators(A => B, (A1 => B1)) :-
+    !, translate_operators(A, A1), translate_operators(B, B1).
+
+% Biconditional
+translate_operators(A <=> B, (A1 <=> B1)) :-
+    !, translate_operators(A, A1), translate_operators(B, B1).
+
+% Universal quantifier with brackets: ![X]:F
+translate_operators(![Var]:A, (all RealVar:A1)) :-
+    !,
+    substitute_var_in_formula(A, Var, RealVar, A_subst),
+    translate_operators(A_subst, A1).
+
+% Existential quantifier with brackets: ?[X]:F
+translate_operators(?[Var]:A, (ex RealVar:A1)) :-
+    !,
+    substitute_var_in_formula(A, Var, RealVar, A_subst),
+    translate_operators(A_subst, A1).
+
+% Universal quantifier simple syntax: !X:F (alternative)
+translate_operators(!Var:A, (all VarUpper:A1)) :-
+    atom(Var), !,
+    upcase_atom(Var, VarUpper),
+    translate_operators(A, A1).
+
+% Existential quantifier simple syntax: ?X:F (alternative)
+translate_operators(?Var:A, (ex VarUpper:A1)) :-
+    atom(Var), !,
+    upcase_atom(Var, VarUpper),
+    translate_operators(A, A1).
+
+% General compound terms (predicates with arguments)
+translate_operators(Term, Term1) :-
+    compound(Term),
+    Term =.. [F|Args],
+    maplist(translate_operators, Args, Args1),
+    Term1 =.. [F|Args1].
+
+% =========================================================================
+% VARIABLE SUBSTITUTION
+% =========================================================================
+%% substitute_var_in_formula(+Formula, +OldVar, +NewVar, -NewFormula)
+substitute_var_in_formula(Var, OldVar, NewVar, NewVar) :-
+    atomic(Var), Var == OldVar, !.
+substitute_var_in_formula(Atom, _OldVar, _NewVar, Atom) :-
+    atomic(Atom), !.
+substitute_var_in_formula(Var, _OldVar, _NewVar, Var) :-
+    var(Var), !.
+substitute_var_in_formula(Term, OldVar, NewVar, NewTerm) :-
+    compound(Term), !,
+    Term =.. [F|Args],
+    maplist(substitute_var_in_formula_curry(OldVar, NewVar), Args, NewArgs),
+    NewTerm =.. [F|NewArgs].
+
+substitute_var_in_formula_curry(OldVar, NewVar, Arg, NewArg) :-
+    substitute_var_in_formula(Arg, OldVar, NewVar, NewArg).
+%%% End of minimal driver for nanoCop integration
+
+
+
+% =========================================================================
+% ITERATION LIMITS CONFIGURATION  (DO NOT CHANGE THESE VALUES !)
+% =========================================================================
+
+logic_iteration_limit(constructive, 3).
+logic_iteration_limit(classical, 4).
+logic_iteration_limit(minimal, 3).
+logic_iteration_limit(intuitionistic, 3).
+logic_iteration_limit(fol, 4).
+
 % =========================================================================
 % UTILITY for/3
 % =========================================================================
@@ -238,12 +964,6 @@ contains_classical_pattern(Formula) :-
 contains_classical_pattern(Formula) :-
     binary_connective(Formula, Left, Right),
     (contains_classical_pattern(Left) ; contains_classical_pattern(Right)), !.
-/*
-contains_classical_pattern(![_-_]:A) :-
-    contains_classical_pattern(A), !.
-contains_classical_pattern(?[_-_]:A) :-
-    contains_classical_pattern(A), !.
-*/
 
 binary_connective(A & B, A, B).
 binary_connective(A | B, A, B).
@@ -1487,6 +2207,8 @@ member_check(Term, List) :-
     Term =@= Elem,
     !.
 
+% TABLING: Memoization to avoid redundant computations
+:- table g4mic_proves/7.    % ← CETTE UNIQUE LIGNE
 
 % g4mic_proves/7 -
 % g4mic_proves(Sequent, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, Proof)
@@ -1589,12 +2311,6 @@ g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, 
     Delta = [A=>B], !,
     g4mic_proves([A|Gamma]>[B], FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, P).
 % 6. L->->
-/*
-g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, ltoto(Gamma>Delta,P1,P2)) :-
-    select(((A=>B)=>C),Gamma,G1), !,
-    g4mic_proves([A,(B=>C)|G1]>[B], FreeVars, Threshold, SkolemIn, _J1, LogicLevel, P1),
-    g4mic_proves([C|G1]> Delta, FreeVars, Threshold, _K1, SkolemOut, LogicLevel, P2).
-*/
 g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, ltoto(Gamma>Delta,P1,P2)) :-
     select(((A=>B)=>C),Gamma,G1), !,
     g4mic_proves([A,(B=>C)|G1]>[B], FreeVars, Threshold, SkolemIn, J1, LogicLevel, P1),
@@ -1652,10 +2368,9 @@ g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, classical, c
         % Otherwise: normal case with X
         g4mic_proves([?[Z-X]:(A => B)|G1]>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, classical, P)
     ).
-% 17. CQ_m - Minimal rule (minimal and intuitionistic ONLY, last resort)
-% IMPORTANT: EXCLUDED from classical logic (IP + standard rules suffice)
+% 17. CQ_m - Quantifier conversion (VALID IN ALL LOGICS)
+% Critical rule: (?[X]:A => B) → ![X]:(A => B)
 g4mic_proves(Gamma>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, cq_m(Gamma>Delta,P)) :-
-    member(LogicLevel, [minimal, intuitionistic]),
     select((?[Z-X]:A)=>B, Gamma, G1),
     g4mic_proves([![Z-X]:(A=>B)|G1]>Delta, FreeVars, Threshold, SkolemIn, SkolemOut, LogicLevel, P).
 % =========================================================================
@@ -1749,7 +2464,7 @@ g4mic_proves(Gamma > Delta, _, _, SkolemIn, SkolemIn, _, eq_subst(Gamma>Delta)) 
 % Antisequent with empty Gamma: ⊬ B
 g4mic_proves([] > Delta, _, Threshold, SkolemIn, SkolemIn, classical, asq([] < Delta, _)) :-
     nb_current(asq_enabled, true),
-    Threshold >= 15,
+    Threshold >= 4,   % DO NOT CHANGE THIS VALUE !
     Delta = [B],
     B \= asq,
     B \= asq(_,_),
@@ -1759,7 +2474,7 @@ g4mic_proves([] > Delta, _, Threshold, SkolemIn, SkolemIn, classical, asq([] < D
 % Antisequent with non-empty Gamma: Γ ⊬ B
 g4mic_proves(Gamma > Delta, _, Threshold, SkolemIn, SkolemIn, classical, asq(Gamma < Delta, _)) :-
     nb_current(asq_enabled, true),
-    Threshold >= 15,
+    Threshold >= 4,         % DO NOT CHANGE THIS VALUE !
     Gamma \= [],  % Gamma non-empty
     Delta = [B],
     B \= asq,
@@ -2675,7 +3390,7 @@ is_quantified(?[_-_]:_) :- !.
 contains_skolem(Formula) :-
     Formula =.. [_|Args],
     member(Arg, Args),
-    (Arg = f_sk(_,_) ; compound(Arg), contains_skolem(Arg)).
+    (Arg = f_sk(_) ; Arg = f_sk(_,_) ; compound(Arg), contains_skolem(Arg)).
 
 is_direct_conjunct(G, (A & B)) :- (G = A ; G = B), !.
 is_direct_conjunct(G, (A & R)) :- (G = A ; is_direct_conjunct(G, R)).
@@ -4221,7 +4936,13 @@ rewrite(#, J, J, '\\bot') :- !.
 rewrite(# => #, J, J, '\\top') :- !.
 
 % NEW CLAUSE TO HANDLE SKOLEM CONSTANTS
-% Converts f_sk(K,_) to a simple name like 'a', 'b', etc.
+% Converts f_sk(K) to a simple name like 'a', 'b', etc. (single argument version)
+rewrite(f_sk(K), J, J, Name) :-
+    integer(K),
+    !,
+    rewrite_name(K, Name).
+
+% Converts f_sk(K,_) to a simple name like 'a', 'b', etc. (two arguments version)
 rewrite(f_sk(K,_), J, J, Name) :-
     !,
     rewrite_name(K, Name).
@@ -4348,6 +5069,8 @@ simple_term(X) :-
     atomic(X), !.
 simple_term(X) :-
     var(X), !.
+simple_term(f_sk(_)) :-
+    !.
 simple_term(f_sk(_,_)) :-
     !.
 simple_term(X) :-
@@ -4422,6 +5145,11 @@ rewrite_term(V, J, K, V) :-
     !,
     rewrite_name(J, V),
     K is J+1.
+
+rewrite_term(f_sk(K), J, J, N) :-
+    integer(K),
+    !,
+    rewrite_name(K, N).
 
 rewrite_term(f_sk(K,_), J, J, N) :-
     !,
@@ -4706,6 +5434,7 @@ contains_equality(Term) :-
     contains_equality(Arg).
 
 % Fonctions de Skolem
+contains_function_symbol(f_sk(_)) :- !.
 contains_function_symbol(f_sk(_,_)) :- !.
 contains_function_symbol(Term) :-
     compound(Term),
@@ -4879,6 +5608,7 @@ is_definitely_term(X) :-
     \+ known_predicate(X),  % Constant, not predicate
     !.
 
+is_definitely_term(f_sk(_)) :- !.  % Skolem function (single arg)
 is_definitely_term(f_sk(_,_)) :- !.  % Skolem function
 
 is_definitely_term(Term) :-
@@ -4961,6 +5691,7 @@ is_formula(Term) :-
 % A term is: constant, variable, or function application
 is_term_not_formula(X) :-
     atomic(X), !.  % Constant or variable
+is_term_not_formula(f_sk(_)) :- !.  % Skolem function (single arg)
 is_term_not_formula(f_sk(_,_)) :- !.  % Skolem function
 is_term_not_formula(Term) :-
     compound(Term),

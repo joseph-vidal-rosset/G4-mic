@@ -20,8 +20,6 @@
     % catch([nanocop20], _,
         format('WARNING: nanoCoP core not found!~n')).
 
-% Load proof module
-% :- catch([nanocop_proof], _, true).
 
 % CRITICAL: Load nanocop_tptp2 for equality axioms
 :- catch([nanocop_tptp2], _,

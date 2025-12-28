@@ -112,10 +112,10 @@ bmatrix(F,Set,M) :-
       ; bmatrix(F1,0,M1,[],[],_,1,_,_), ( member(reo(I),Set) ->
         reorderC([M1],[_:M],I) ; _:M=M1 ) ).
 
-%% Ajout 
+%% Ajout
 bmatrix(![X]:F1, Pol, M, FreeV, FV, Paths, I, I1, K) :- !,
     bmatrix(all X:F1, Pol, M, FreeV, FV, Paths, I, I1, K).
-    
+
 bmatrix(?[X]:F1, Pol, M, FreeV, FV, Paths, I, I1, K) :- !,
     bmatrix(ex X:F1, Pol, M, FreeV, FV, Paths, I, I1, K).
 %%% fin de l'ajout
