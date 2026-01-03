@@ -1821,8 +1821,6 @@ provable_at_level(Sequent, classical, Proof) :-
         nb_setval(asq_enabled, false)
     ),
     !.  % Cut to prevent backtracking to alternative proofs
-
-
 % =========================================================================
 % DISPLAY HELPERS
 % =========================================================================
@@ -3123,9 +3121,16 @@ find_context_line(![Z-_]:SearchBody, Context, LineNumber) :-
         ContextFormula = (![Z]:ContextBody),
         formulas_equivalent(SearchBody, ContextBody)
     ;
-        % Case 2: Context with annotation
+        % Case 2: Context with annotation - compare bodies after stripping annotations
         ContextFormula = (![Z-_]:ContextBody),
-        formulas_equivalent(SearchBody, ContextBody)
+        (
+            formulas_equivalent(SearchBody, ContextBody)
+        ;
+            % Fallback: strip all annotations and compare structurally
+            strip_annotations_deep(SearchBody, StrippedSearch),
+            strip_annotations_deep(ContextBody, StrippedContext),
+            StrippedSearch =@= StrippedContext
+        )
     ),
     !.
 
@@ -3137,7 +3142,14 @@ find_context_line(?[Z-_]:SearchBody, Context, LineNumber) :-
         formulas_equivalent(SearchBody, ContextBody)
     ;
         ContextFormula = (?[Z-_]:ContextBody),
-        formulas_equivalent(SearchBody, ContextBody)
+        (
+            formulas_equivalent(SearchBody, ContextBody)
+        ;
+            % Fallback: strip all annotations and compare structurally
+            strip_annotations_deep(SearchBody, StrippedSearch),
+            strip_annotations_deep(ContextBody, StrippedContext),
+            StrippedSearch =@= StrippedContext
+        )
     ),
     !.
 
@@ -3374,14 +3386,23 @@ find_disj_context(L, R, Context, Line) :-
     ).
 
 extract_witness(SubProof, Witness) :-
-    SubProof =.. [Rule|Args],
+    SubProof =.. [_Rule|Args],
     Args = [(Prem > _)|_],
-    ( member(Witness, Prem), contains_skolem(Witness),
-      ( Rule = rall ; Rule = lall ; \+ is_quantified(Witness) )
-    ), !.
+    % Find first witness with Skolem
+    member(Witness, Prem),
+    contains_skolem(Witness),
+    !.
 extract_witness(SubProof, Witness) :-
     SubProof =.. [_, (_ > _), SubSP|_],
     extract_witness(SubSP, Witness).
+
+% Check if witness already exists in context (structurally, ignoring annotations)
+witness_in_context(Witness, Context) :-
+    member(_:CtxFormula, Context),
+    strip_annotations_deep(Witness, StrippedWitness),
+    strip_annotations_deep(CtxFormula, StrippedCtx),
+    StrippedWitness =@= StrippedCtx,
+    !.
 
 is_quantified(![_-_]:_) :- !.
 is_quantified(?[_-_]:_) :- !.
@@ -3909,7 +3930,8 @@ fitch_g4_proof(lex((Premisses > [Goal]), SubProof), Context, Scope, CurLine, Nex
     select((?[Z-X]:Body), Premisses, _),
     find_context_line(?[Z-X]:Body, Context, ExistLine),
     extract_witness(SubProof, Witness),
-    ( member(_:Witness, Context) ->
+    % Check if witness already in context (structurally)
+    ( witness_in_context(Witness, Context) ->
         fitch_g4_proof(SubProof, Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut)
     ; WitLine is CurLine + 1,
       NewScope is Scope + 1,
@@ -4096,6 +4118,8 @@ fitch_g4_proof(UnknownRule, _Context, _Scope, CurLine, CurLine, CurLine, VarIn, 
 % =========================================================================
 % NATURAL DEDUCTION PRINTER IN TREE STYLE
 % =========================================================================
+:- dynamic fitch_line/4.
+:- dynamic abbreviated_line/1.
 % =========================================================================
 % DISPLAY PREMISS LIST FOR TREE STYLE
 % =========================================================================
@@ -4326,7 +4350,11 @@ build_tree_from_just(lex(ExistLine, WitNum, GoalNum), _LineNum, Formula, FitchLi
 build_tree_from_just(rex(WitLine), _LineNum, Formula, FitchLines, unary_node(rex, Formula, SubTree)) :-
     !, build_buss_tree(WitLine, FitchLines, SubTree).
 
-% L∀ (Forall Elim)
+% L∀ (Forall Elim) - Special case when UnivLine = 0 (not found in context)
+build_tree_from_just(lall(0), _LineNum, Formula, _FitchLines, axiom_node(Formula)) :-
+    !.
+
+% L∀ (Forall Elim) - Normal case
 build_tree_from_just(lall(UnivLine), _LineNum, Formula, FitchLines, unary_node(lall, Formula, SubTree)) :-
     !, build_buss_tree(UnivLine, FitchLines, SubTree).
 
