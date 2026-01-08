@@ -25,13 +25,65 @@
 % -----------------------------------------------------------------
 % prove(F,Proof) - prove formula F
 
+
+
 prove(F,Proof) :- prove2(F,[cut,comp(7)],Proof).
 
+/*  the following nanoCop code
 prove2(F,Set,Proof) :-
     bmatrix(F,Set,Mat), retractall(lit(_,_,_,_)),
     assert_matrix(Mat), prove(Mat,1,Set,Proof).
 
-% start rule
+is changed for :
+*/
+% --- Semantic Interpreter (English & Skolem Cleanup) ---
+g4mic_interpret_path([], []).
+g4mic_interpret_path([Lit|Rest], [Interpretation|Interps]) :-
+    ( Lit = -Atom ->
+        clean_skolem(Atom, CleanAtom),
+        Interpretation = (CleanAtom = 'True')
+    ;   clean_skolem(Lit, CleanLit),
+        Interpretation = (CleanLit = 'False')
+    ),
+    g4mic_interpret_path(Rest, Interps).
+
+% Helper to make Skolem terms (ID^[Args]) readable as skID(Args)
+clean_skolem(Term, CleanTerm) :-
+    ( var(Term) -> CleanTerm = 'X'
+    ; compound(Term) ->
+        Term =.. [F|Args],
+        ( F = (^), Args = [ID|SubArgs] ->
+            atomic_list_concat([sk, ID], SkName),
+            maplist(clean_skolem, SubArgs, CleanArgs),
+            CleanTerm =.. [SkName|CleanArgs]
+        ; maplist(clean_skolem, Args, CleanArgs),
+          CleanTerm =.. [F|CleanArgs]
+        )
+    ; CleanTerm = Term ).
+
+% --- Main Engine Hook ---
+prove2(F, Set, Proof) :-
+    bmatrix(F, Set, Mat),
+    nb_setval(g4mic_matrix, Mat),
+    retractall(lit(_,_,_,_)),
+    assert_matrix(Mat),
+    ( prove(Mat, 1, Set, Proof) ->
+        format('~n✅ VALID (nanoCoP).~n')
+    ;   format('~n❌ INVALID (nanoCoP).~n'),
+        nb_getval(g4mic_matrix, G4Mat),
+        format(' === RAW MATRIX CONSTRUCTION ===~n ~w~n', [G4Mat]),
+        (member((_^_)^_:StartCla, G4Mat) ->
+            format('~n === RAW OPEN PATH ===~n ~w~n', [StartCla]),
+            g4mic_interpret_path(StartCla, CounterModel),
+            format('~n 🎯 COUNTER-MODEL INTERPRETATION :~n'),
+            format(' { ~w }~n', [CounterModel])
+        ; true),
+        fail
+    ).
+
+
+
+% start rule  (nanoCop code again)
 prove(Mat,PathLim,Set,[(I^0)^V:Proof]) :-
     ( member(scut,Set) -> ( append([(I^0)^V:Cla1|_],[!|_],Mat) ;
         member((I^0)^V:Cla,Mat), positiveC(Cla,Cla1) ) -> true ;

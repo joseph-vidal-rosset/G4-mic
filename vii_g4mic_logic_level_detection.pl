@@ -89,7 +89,7 @@ contains_function_symbol(Term) :-
     contains_function_symbol(Arg).
 
 % =========================================================================
-% FORMULA EXTRACTION FROM A G4 PROOF
+% FORMULA EXTRACTION FROM A G4 PROOF (in driver now)
 % =========================================================================
 
 extract_formula_from_proof(Proof, Formula) :-
@@ -101,6 +101,7 @@ extract_formula_from_proof(Proof, Formula) :-
     ;
         Formula = unknown
     ).
+
 % =========================================================================
 % VALIDATION & WARNINGS MODULE
 % Detection of typing errors and misuse of logical operators

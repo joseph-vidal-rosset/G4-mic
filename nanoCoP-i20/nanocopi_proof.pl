@@ -1,13 +1,13 @@
-%% File: nanocop_proof.pl  -  Version: 1.0  -  Date: 1 May 2021
+%% File: nanocopi_proof.pl  -  Version: 1.0  -  Date: 1 May 2021
 %%
-%% Purpose: Presentation of connection proof found by nanoCoP
+%% Purpose: Presentation of connection proof found by nanoCoP-i
 %%
 %% Author:  Jens Otten
-%% Web:     www.leancop.de/nanocop/
+%% Web:     www.leancop.de/nanocop-i/
 %%
-%% Usage:   nanocop_proof(M,P). % where M is a non-clausal matrix,
-%%                              %  P is the (non-clausal) connection
-%%                              %  proof found by nanoCoP
+%% Usage:   nanocopi_proof(M,P). % where M is a non-clausal matrix,
+%%                               %  P is the (non-clausal) connection
+%%                               %  proof found by nanoCoP-i
 %%
 %% Copyright: (c) 2021 by Jens Otten
 %% License:   GNU General Public License
@@ -18,7 +18,7 @@
 
 %%% output of nanoCoP proof
 
-nanocop_proof(Mat,Proof) :-
+nanocopi_proof(Mat,Proof) :-
     proof(compact) -> nanocop_compact_proof(Proof) ;
     proof(connect) -> nanocop_connect_proof(Mat,Proof) ;
     proof(readable) -> nanocop_readable_proof(Mat,Proof) ;
@@ -97,7 +97,7 @@ calc_proof([(I^K)^V:Cla],Mat,[(ClaF,I^K,Sub)|Proof]) :-
 calc_cla([],_,_,_,_,[],[[],[]],[]).
 
 calc_cla([J^_:(I^_)^V:Cla|ClaT],ClaM,M,Path,Lem,Cla1,Sub,Proof) :-
-    !, member(J^_:Mat,ClaM), member((I^_)^W:ClaM1,Mat),
+    !, member(J^_:Mat,ClaM), member((I^_)^W^_:ClaM1,Mat),
     calc_cla(Cla,ClaM1,M,Path,Lem,Cla2,[VL2,VS2],Proof2),
     calc_cla(ClaT,ClaM,M,Path,Lem,Cla3,[VL3,VS3],Proof3),
     ( Cla2=[] -> Cla1=Cla3 ; Cla1=[I:Cla2|Cla3] ),
@@ -114,13 +114,13 @@ calc_cla([Lit,ClaPr|ClaT],ClaM,M,Path,Lem,[Lit|Cla1],Sub,Proof) :-
       IK=I^_, Num=IK,  member_mat(I,M,0:[],(I^_)^W:Cla2) ),
     calc_cla(Cla,Cla2,M,[IP:Lit|Path],Lem,Cla3,[VL,VS],Proof3),
     append(W,VL,VL1), append(V,VS,VS1), Sub3=[VL1,VS1],
-    flatten_cla(Cla3,0,ClaF), ClaNS=([NegLit|ClaF],Num,Sub3),
+    flatten_cla(Cla3,0,ClaF), ClaNS=([NegLit|ClaF],Num,Sub3), 
     Proof1=[[ClaNS|Proof3]], append(Proof1,Proof2,Proof).
 
 % member_mat(I,Mat,Cla,Cla1) returns clause Cla1 number I in Mat
 
 member_mat(I,[],J:Cla,Cla1) :- !, J\=0, member_mat(I,Cla,0:[],Cla1).
-member_mat(I,Mat,_,(I^K)^V:Cla1) :- member((I^K)^V:Cla1,Mat), !.
+member_mat(I,Mat,_,(I^K)^V:Cla1) :- member((I^K)^V^_:Cla1,Mat), !.
 
 member_mat(I,[X|M],I2:Cla2,Cla1) :-
     ( ( X=(J^_)^_:Cla ; X=J^_:Cla,atomic(J) ),I>J,J>I2 )
@@ -129,7 +129,7 @@ member_mat(I,[X|M],I2:Cla2,Cla1) :-
 % flatten_cla(Cla,I,Cla1) returns flattend clause Cla1 of Cla
 
 flatten_cla([],_,[]).
-flatten_cla([I:C|T],_,C1) :- !, flatten_cla([C|T],I,C1).
+flatten_cla([I:C|T],_,C1) :- number(I), !, flatten_cla([C|T],I,C1).
 flatten_cla([[X|C]|T],I,C1) :- !, flatten_cla([X|C],I,D),
                                flatten_cla(T,I,E), append(D,E,C1).
 flatten_cla([Lit|T],0,[Lit|C1]) :- !, flatten_cla(T,0,C1).
@@ -203,9 +203,10 @@ print_proof_step(I,[Lit|Cla],Num,Sub) :-
       (R=r -> print_redu(I,[H|T]) ; print_fact(I,[R|T])) ;
       print_clause(I,Cla,Num,Sub) ).
 
-print_assume(I,Lit) :-
-    print_step(I), print(' Assume '), (-NegLit=Lit;-Lit=NegLit) ->
-    print(NegLit), print(' is '), print('false.'), nl.
+print_assume(I,Lit:Pre) :-
+    print_step(I), print(' Assume '),
+    (-NegLit:(-PreN)=Lit:Pre ; -Lit:(-Pre)=NegLit:PreN) ->
+    print(NegLit:PreN), print(' is '), print('false.'), nl.
 
 print_clause(I,Cla,Num,Sub) :-
     print_sp(I), print(' Then clause ('), print(Num), print(')'),
@@ -246,10 +247,11 @@ print_sp([I,J|T]) :- print_sp([J|T]), print(' '), print_sp([I]).
 
 print_explanations :-
  print('Explanations for the proof presented below:'), nl,
- print('- to solve unsatisfiable problems they are negated'), nl,
  print('- equality axioms are added if required'), nl,
  print('- terms and variables are represented by Prolog terms'), nl,
  print('  and Prolog variables, negation is represented by -'), nl,
+ print('- a prefix Pre is a list of variables and constants'), nl,
+ print('  and assigned to each literal Lit, i.e. Pre:Lit'), nl,
  print('- clauses and (sub-)matrices have a unique label I^K:'), nl,
  print('  or I^K^[..]:, where I is a unique number/identifier'), nl,
  print('  and K identifies the instance of clause/matrix I'), nl,
@@ -257,7 +259,8 @@ print_explanations :-
  print('- in the matrix, I^[t1,..,tn] may represent the atom'), nl,
  print('  P_I(t1,..,tn) or the Skolem term f_I(t1,t2,..,tn)'), nl,
  print('- the substitution [[X1,..,Xn],[t1,..,tn]] represents'), nl,
- print('  the assignments X1:=t1, .., Xn:=tn'), nl, nl.
+ print('  the assignments X1:=t1, .., Xn:=tn (for both term' ), nl,
+ print('  and prefix variables)' ), nl, nl.
 
 print_introduction :-
  print('We prove that the given matrix is valid, i.e. for'), nl,

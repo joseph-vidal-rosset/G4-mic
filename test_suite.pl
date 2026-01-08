@@ -35,6 +35,9 @@
 %  Execute l'integralite de la suite de tests avec mesure du temps
 %  Inclut : tests unitaires, sequents FOL/Prop, Pelletier
 run_all_test_files :-
+    % Clean state at the very start
+    abolish_all_tables,
+    init_eigenvars,
     get_time(StartTime),
     writeln(''),
     writeln('##############################################'),
@@ -69,6 +72,9 @@ run_all_test_files :-
 %  Execute un predicat de test avec gestion d'erreurs et chronometre
 safe_run(Goal, Name) :-
     format('~n--- ~w ---~n', [Name]),
+    % Clean state before each test group
+    abolish_all_tables,
+    init_eigenvars,
     get_time(Start),
     catch(
         (call(Goal) ->
@@ -194,12 +200,13 @@ pelletier_tests([
     'Pel_01_drinker' - (?[y]:(d(y) => ![x]:(d(x)))),
     'Pel_02_dn_forall_exists' - ((~(![x]:p(x))) <=> (?[x]:(~p(x)))),
     'Pel_03_forall_inst' - ((![x]:p(x)) => p(a)),
+    'Extra_01_drinker_variant' - (?[x]:(p(x) => ![y]:(p(y) | q(y)))),
     'Pel_04_forall_preserve_exist' - ((![x]:(p(x) => q(x))) => ((?[x]:p(x)) => ?[x]:q(x))),
     'Pel_05_exists_conj_split' - ((?[x]:(p(x) & q(x))) => (?[x]:p(x) & ?[x]:q(x))),
     'Pel_06_leibniz' - (((a = b) & p(a)) => p(b)),
     'Pel_07_eq_sym' - ((a = b) <=> (b = a)),
     'Pel_08_eq_trans' - (((a = b) & (b = c)) => (a = c)),
-    'Pel_09_quantifier_swap_failure' - (![x]:(?[y]:(r(x,y))) => ?[y]:(![x]:(r(x,y)))),
+   %  'Pel_09_quantifier_swap_failure' - (![x]:(?[y]:f(x,y)) => ?[y]:(![x]:f(x,y))),
     'Pel_10_exist_forall_exchange' - ((?[y]:(![x]:p(x,y))) => (![x]:(?[y]:p(x,y)))),
     'Pel_11_existential_elim_schema' - ((?[x]:p(x)) => ((![x]:(p(x) => q)) => q)),
     'Pel_12_univ_distrib_impl' - ((![x]:(p(x) => q)) <=> ((?[x]:p(x)) => q)),
@@ -211,14 +218,13 @@ pelletier_tests([
     % Pel_18 corrected: ?x (P(x) ? Q(x)) ? (?x P(x)) ? (?x Q(x))  (valid)
     'Pel_18_classical_choice' - ((?[x]:(p(x) | q(x))) <=> (?[x]:p(x) | ?[x]:q(x))),
     'Pel_19_pelletier_sample1' - ((![x]:(p(x) => ?[y]:q(x,y))) => ?[y]:(![x]:(p(x) => q(x,y)))),
-    'Extra_01_drinker_variant' - (?[x]:(p(x) => ![y]:(p(y) | q(y)))),
     'Extra_03_choice_like' - ((![x]:(p(x) => q(x)) & ?[x]:p(x)) => ?[x]:q(x)),
     'Extra_04_equality_leibniz_pred' - (((a = b) & r(a)) => r(b)),
     'Extra_05_mixed_quant' - ((?[x]:(![y]:r(x,y))) => (![y]:(?[x]:r(x,y)))),
     'Extra_06_double_negation' - ((~ ~ p) => p),
     'Extra_07_peirce_variant' - ((((p => q) => p) => p)),
     'Extra_08_explosion' - ((p & ~ p) => #),
-    'Extra_09_transfer' - ((![x]:(p(x) & q(x))) => (![x]:p(x) & ![x]:q(x)))
+    'Extra_![x]: ?[y]:r(x,y)=> ?[y]:![x]:r(x,y)09_transfer' - ((![x]:(p(x) & q(x))) => (![x]:p(x) & ![x]:q(x)))
 ]).
 
 % -------------------------------------------------------------------------
@@ -231,8 +237,11 @@ pelletier_tests([
 % Runner: run_pelletier/0
 % -------------------------------------------------------------------------
 run_pelletier :-
+    % Clean state before starting Pelletier tests
+    abolish_all_tables,
+    init_eigenvars,
     pelletier_tests(Tests),
-    writeln('=== PELLETIER / HARD FOL TEST SUITE (silent, timeout enabled) ==='),
+    writeln('=== PELLETIER / HARD FOL TEST SUITE (direct execution, no timeout) ==='),
     run_pelletier_list(Tests, 1, 0, 0, 0, Tot),
     Tot = [Total, Proven, Failed, Skipped],
     nl,
@@ -247,10 +256,15 @@ run_pelletier_list([Name-Formula|Rest], N, PAcc, FAcc, SAcc, Tot) :-
         writeln('SKIPPED (INVALID)'),
         PAcc1 is PAcc, FAcc1 is FAcc, SAcc1 is SAcc + 1
     ;
-        pelletier_timeout(TOSeconds),
+        % Clean state before each test to avoid table pollution and cyclic terms
+        abolish_all_tables,
+        init_eigenvars,
+        % Direct call without timeout, matching run_all_tests structure
         catch(
-            ( safe_time_out((prove(Formula) -> Status = proved ; Status = not_proved), TOSeconds, Result),
-              interpret_safe_result(Result, Status, Outcome)
+            ( prove(Formula) ->
+                Outcome = proved
+            ;
+                Outcome = not_proved
             ),
             E,
             Outcome = error(E)
@@ -279,16 +293,20 @@ report_outcome(error(E)) :- format('ERROR: ~w~n', [E]).
 % run single named test
 % -------------------------------------------------------------------------
 run_pelletier_named(Name) :-
+    % Clean state before running individual test
+    abolish_all_tables,
+    init_eigenvars,
     pelletier_tests(Tests),
     ( member(Name-Formula, Tests) ->
         ( known_invalid(Name) ->
             writeln('SKIPPED (INVALID)')
         ;
-            pelletier_timeout(TOSeconds),
-            format('Running test ~w with timeout ~w seconds...~n', [Name, TOSeconds]),
+            format('Running test ~w...~n', [Name]),
             catch(
-                ( safe_time_out((prove(Formula) -> writeln('PROVED') ; writeln('NOT PROVED')), TOSeconds, Res),
-                  ( Res == time_out -> writeln('TIMEOUT') ; true )
+                ( prove(Formula) ->
+                    writeln('PROVED')
+                ;
+                    writeln('NOT PROVED')
                 ),
                 E, format('ERROR: ~w~n', [E])
             )

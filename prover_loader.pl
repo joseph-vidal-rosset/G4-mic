@@ -10,7 +10,8 @@
 % IMPORTANT: Uncomment ONE of these lines depending on your setup:
 
 % If using the fixed web2 version:
-:- ['g4mic_nanoCop_web_fixed.pl'].
+:- ['g4mic_with_nanoCop_filter.pl'].
+% :- ['viii_g4mic_nanoCop_driver.pl'].
 
 % If using the original web_en version:
 % :- ['g4mic_web_en.pl'].
@@ -22,6 +23,7 @@
 % =========================================================================
 % Verify that required predicates exist
 % =========================================================================
+
 :- initialization((
                          (current_predicate(prove/1) ->
                               writeln('✓ g4mic_nanoCop prover loaded successfully'),
@@ -32,6 +34,7 @@
                              fail
                          )
                      )).
+
 
 % =========================================================================
 % Now load the test suite
@@ -64,3 +67,5 @@
 % Or in one go:
 %   ?- ['g4mic_web_en.pl'], ['test_suite.pl'], run_all_test_files.
 % =========================================================================
+
+% ?- ['g4mic_web_en.pl'].

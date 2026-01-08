@@ -1,45 +1,43 @@
-%% File: minimal_driver.pl  -  Version: 2.3
+%% File: minimal_driver.pl  -  Version: 3.0
 %%
-%% Purpose: Minimal interface for nanoCoP with automatic equality support
+%% Purpose: Minimal interface for nanoCoP (CLASSICAL ONLY - no nanoCop-i)
 %% Usage:   nanoCop_decides(Formula).
 %%
 %% Author: Joseph Vidal-Rosset
 %% Based on: nanoCoP by Jens Otten
-%% Fix: Added proper translation for # (bottom/falsum)
-%% Fix v2.3: Isolated occurs_check flag to prevent interference with g4mic
+%% Version 3.0: Removed nanoCop-i, only classical nanoCop
 % =========================================================================
 
 % =========================================================================
 % LOADING REQUIRED MODULES
 % =========================================================================
-% :- catch([operators], _, true).
 :- catch([system_check], _, true).
 
-% Load nanoCoP core
+% Load nanoCoP core (CLASSICAL ONLY)
 :- catch([nanocop20_swi], _,
-    % catch([nanocop20], _,
         format('WARNING: nanoCoP core not found!~n')).
-
 
 % CRITICAL: Load nanocop_tptp2 for equality axioms
 :- catch([nanocop_tptp2], _,
     format('WARNING: nanocop_tptp2 not found - equality support disabled!~n')).
 
 % =========================================================================
-% MAIN INTERFACE with EQUALITY SUPPORT and FLAG ISOLATION
+% MAIN INTERFACE - CLASSICAL NANOCOP ONLY
+% =========================================================================
+% =========================================================================
+% G4MIC INTERFACE - prove/1
 % =========================================================================
 %% nanoCop_decides(+Formula) - Prove formula with automatic equality axioms
 %%
 %% CRITICAL: This predicate manages occurs_check flag:
-%% - nanoCop requires occurs_check=true (set by its module load)
-%% - g4mic requires occurs_check=false (default Prolog behavior)
-%% - We force false during setup, restore to true only during nanoCop call
+%% - nanoCop requires occurs_check=true
+%% - g4mic requires occurs_check=false
+%% - This wrapper ensures proper isolation
 nanoCop_decides(Formula) :-
-    % Save current state (will be true if nanoCop module is loaded)
+    % Save current state
     current_prolog_flag(occurs_check, OriginalOccursCheck),
 
-    % CRITICAL: Force occurs_check=false IMMEDIATELY for formula processing
-    % This ensures translation and preprocessing happen with correct flag
+    % Force occurs_check=false for formula processing
     set_prolog_flag(occurs_check, false),
 
     % Use setup_call_cleanup to guarantee proper flag management
@@ -65,7 +63,7 @@ nanocop_prove_core(Formula) :-
         HasEquality = false
     ),
 
-    % Step 2: Translate formula (![X]:  → all X:)
+    % Step 2: Translate formula (![X]: → all X:)
     translate_formula(Formula, InternalFormula),
 
     % Step 3: Add equality axioms AFTER translation (if needed)
@@ -73,15 +71,12 @@ nanocop_prove_core(Formula) :-
         (current_predicate(leancop_equal/2) ->
             leancop_equal(InternalFormula, TempFormula),
             (InternalFormula \= TempFormula ->
-                format('~n[Equality detected - axioms added by leancop_equal]~n'),
                 FormulaWithEq = TempFormula
             ;
-                format('~n[Equality detected - using basic axioms (leancop_equal failed)]~n'),
                 basic_equality_axioms(EqAxioms),
                 FormulaWithEq = (EqAxioms => InternalFormula)
             )
         ;
-            format('~n[Equality detected - using basic axioms]~n'),
             basic_equality_axioms(EqAxioms),
             FormulaWithEq = (EqAxioms => InternalFormula)
         )
@@ -90,52 +85,7 @@ nanocop_prove_core(Formula) :-
     ),
 
     % Step 4: Prove (occurs_check is true here)
-    time(prove2(FormulaWithEq, [cut,comp(7)], _Proof)),
-    !.
-
-% =========================================================================
-% INTERNAL NANOCOP LOGIC (isolated from flag pollution)
-% =========================================================================
-%% nanocop_prove_isolated(+Formula) - Internal predicate with nanoCop logic
-nanocop_prove_isolated(Formula) :-
-    % Step 1: Detect equality BEFORE translation
-    (nanocop_contains_equality(Formula) ->
-        HasEquality = true
-    ;
-        HasEquality = false
-    ),
-
-    % Step 2: Translate formula (![X]:  → all X:)
-    translate_formula(Formula, InternalFormula),
-
-    % Step 3: Add equality axioms AFTER translation (if needed)
-    (HasEquality = true ->
-        (current_predicate(leancop_equal/2) ->
-            % Try leancop_equal first
-            leancop_equal(InternalFormula, TempFormula),
-            % Check if axioms were actually added
-            (InternalFormula \= TempFormula ->
-                format('~n[Equality detected - axioms added by leancop_equal]~n'),
-                FormulaWithEq = TempFormula
-            ;
-                % Fallback:  leancop_equal failed, use basic axioms
-                format('~n[Equality detected - using basic axioms (leancop_equal failed)]~n'),
-                basic_equality_axioms(EqAxioms),
-                FormulaWithEq = (EqAxioms => InternalFormula)
-            )
-        ;
-            % leancop_equal not available
-            format('~n[Equality detected - using basic axioms]~n'),
-            basic_equality_axioms(EqAxioms),
-            FormulaWithEq = (EqAxioms => InternalFormula)
-        )
-    ;
-        % No equality detected
-        FormulaWithEq = InternalFormula
-    ),
-
-    % Step 4: Prove (occurs_check is already true from nanoCop module load)
-    time(prove2(FormulaWithEq, [cut,comp(7)], _Proof)),
+    prove2(FormulaWithEq, [cut,comp(7)], _Proof),
     !.
 
 % =========================================================================
@@ -162,7 +112,7 @@ nanocop_contains_equality(A <=> B) :- !,
 nanocop_contains_equality(![_]: A) :- !,
     nanocop_contains_equality(A).
 
-nanocop_contains_equality(? [_]:A) :- !,
+nanocop_contains_equality(?[_]:A) :- !,
     nanocop_contains_equality(A).
 
 nanocop_contains_equality(all _:A) :- !,
@@ -205,7 +155,6 @@ translate_formula(F, F_out) :-
 % =========================================================================
 % OPERATOR TRANSLATION
 % =========================================================================
-% CRITICAL: Handle # (bottom/falsum) - must come FIRST before compound terms
 
 % Bottom/falsum: # is translated to ~(p0 => p0) which represents ⊥
 translate_operators(F, (~(p0 => p0))) :-
@@ -219,7 +168,7 @@ translate_operators(F, (p0 => p0)) :-
     (F == t ; F == top ; F == verum),
     !.
 
-% Atomic formulas (must come before compound terms check)
+% Atomic formulas
 translate_operators(F, F) :-
     atomic(F),
     \+ (F == '#'), \+ (F == f), \+ (F == bot),
