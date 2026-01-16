@@ -4,6 +4,7 @@
 :- use_module(library(lists)).
 :- use_module(library(statistics)).
 :- use_module(library(terms)).
+:- [operators].
 :- [minimal_driver].  % To translate nanocop into g4mic and to  use nanocop as filter
 
 % =======================================================================================================================
@@ -17,7 +18,7 @@ nanocop_decides_silent(Formula) :-
     catch(
         setup_call_cleanup(
             true,
-            call_with_inference_limit(nanocop_decides(Formula), 500000, _Result),
+            call_with_inference_limit(nanocop_decides(Formula), 2000000, _Result),
             set_prolog_flag(occurs_check, OriginalFlag)
         ),
         _Error,
@@ -79,58 +80,6 @@ literal_to_assignment([- A|_], A, '⊤') :- atomic(A), !.
 literal_to_assignment([(A => #)|_], A, '⊤') :- atomic(A), !.
 literal_to_assignment([_|Rest], Atom, Value) :-
     literal_to_assignment(Rest, Atom, Value).
-
-% -------------------------------------------------------------------------
-% CORE LOGICAL OPERATORS (shared by all)
-% -------------------------------------------------------------------------
-:- op( 500, fy,  ~).              % negation
-:- op(1000, xfy, &).              % conjunction
-:- op(1100, xfy, '|').            % disjunction
-:- op(1110, xfy, =>).             % implication
-:- op(1130, xfy, <=>).            % biconditional (STANDARD: 1130)
-:- op( 500, xfy, :).              % quantifier separator
-/*
-% -------------------------------------------------------------------------
-% QUANTIFIERS - Dual syntax (TPTP + internal)
-% -------------------------------------------------------------------------
-:- op( 500, fy,  !).              % universal (TPTP): ![X]:
-:- op( 500, fy,  ?).              % existential (TPTP): ?[X]:
-:- op( 500, fy,  all).            % universal (internal): all X:
-:- op( 500, fy,  ex).             % existential (internal): ex X:
-% -------------------------------------------------------------------------
-% EXTENDED TPTP OPERATORS (from nanocop_tptp)
-% -------------------------------------------------------------------------
-:- op(1130, xfy, <~>).            % negated equivalence
-:- op(1110, xfy, <=).             % reverse implication
-:- op(1100, xfy, '~|').           % negated disjunction (NOR)
-:- op(1000, xfy, ~&).             % negated conjunction (NAND)
-% :- op( 400, xfx, =).              % equality
-:- op( 300, xf,  !).              % negated equality (for !=)
-:- op( 299, fx,  $).              % TPTP constants ($true/$false)
-*/
-% =========================================================================
-% g4mic specific
-% =========================================================================
-% Input syntax: sequent turnstile
-% Equivalence operator for sequents (bidirectional provability)
-:- op(800, xfx, <>).
-% =========================================================================
-% LATEX OPERATORS (formatted output)
-%   Respect spaces exactly!
-% =========================================================================
-:- op( 500, fy, ' \\lnot ').     % negation
-:- op(1000, xfy, ' \\land ').    % conjunction
-:- op(1100, xfy, ' \\lor ').     % disjunction
-:- op(1110, xfx, ' \\to ').      % conditional
-:- op(1120, xfx, ' \\leftrightarrow ').  % biconditional
-:- op( 500, fy, ' \\forall ').   % universal quantifier
-:- op( 500, fy, ' \\exists ').   % existential quantifier
-:- op( 500, xfy, ' ').           % space for quantifiers
-:- op(400, fx, ' \\bot ').      % falsity (#)
-% LaTeX syntax: sequent turnstile
-:- op(1150, xfx, ' \\vdash ').
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% End of operators list
 % =========================================================================
 % STARTUP BANNER
 % =========================================================================
@@ -147,14 +96,13 @@ show_banner :-
 
     write('╔═══════════════════════════════════════════════════════════════════╗'), nl,
     write('║                                                                   ║'), nl,
-    write('🎓🎓🎓      G4-mic v1.0 and nanoCoP 2.0 - Two provers for      🎓🎓🎓 '), nl,
-    write('🎓🎓🎓 minimal, intuitionistic and classical First-Order Logic 🎓🎓🎓'), nl,
+    write('🎓🎓🎓                     𝐆𝟒+                                 🎓🎓🎓'), nl,
+    write('🎓🎓🎓    A Unified Prover for Minimal, Intuitionistic and     🎓🎓🎓'), nl,
+    write('🎓🎓🎓       Classical First-Order Logic (G4 + nanoCoP)        🎓🎓🎓'), nl,
     write('║                                                                   ║'), nl,
     write('╠═══════════════════════════════════════════════════════════════════╣'), nl,
     write('║                                                                   ║'), nl,
-    write('⚠️⚠️⚠️ IMPORTANT: ALWAYS CHECK YOUR INPUT & OUTPUT  CAREFULLY! ⚠️⚠️⚠️ '), nl,
-    write('║                                                                   ║'), nl,
-    write('║      Your formula MUST follow the correct syntax (type help.)     ║'), nl,
+    write('⚠️⚠️   Your formula MUST follow the correct syntax (type help.)  ⚠️⚠️ '), nl,
     write('║                                                                   ║'), nl,
     write('╠═══════════════════════════════════════════════════════════════════╣'), nl,
     write('║                                                                   ║'), nl,
@@ -396,7 +344,7 @@ prove(Left <=> Right) :-
 
     nl,
     write('╔═══════════════════════════════════════════════════════════╗'), nl,
-    write('║   🔍 EQUALITY/FUNCTIONS DETECTED → USING NANOCOP ENGINE  ║'), nl,
+    write('    🔍 EQUALITY/FUNCTIONS DETECTED → USING NANOCOP ENGINE    '), nl,
     write('╚═══════════════════════════════════════════════════════════╝'), nl,
     nl,
 
@@ -419,7 +367,7 @@ prove(Left <=> Right) :-
     ( (is_list(Left) ; is_list(Right)) ->
         nl,
         write('╔═══════════════════════════════════════════════════════════════╗'), nl,
-        write('║  ⚠️  SYNTAX ERROR: <=> used with sequents                     ║'), nl,
+        write('   ⚠️  SYNTAX ERROR: <=> used with sequents                      '), nl,
         write('╚═══════════════════════════════════════════════════════════════╝'), nl,
         nl,
         write('You wrote: prove('), write(Left <=> Right), write(')'), nl,
@@ -446,7 +394,7 @@ prove(Left <=> Right) :-
               setup_call_cleanup(
                   true,
                   % Use inference limit here as well
-                  call_with_inference_limit(nanocop_decides(Left <=> Right), 500000, _),
+                  call_with_inference_limit(nanocop_decides(Left <=> Right), 2000000, _),
                   set_prolog_flag(occurs_check, OriginalFlag)
               ),
               _,
@@ -814,7 +762,7 @@ prove(Formula) :-
 
     nl,
     write('╔═══════════════════════════════════════════════════════════╗'), nl,
-    write('║   🔍 EQUALITY/FUNCTIONS DETECTED → USING NANOCOP ENGINE  ║'), nl,
+    write('    🔍 EQUALITY/FUNCTIONS DETECTED → USING NANOCOP ENGINE    '), nl,
     write('╚═══════════════════════════════════════════════════════════╝'), nl,
     nl,
 
@@ -841,7 +789,7 @@ prove(Formula) :-
           setup_call_cleanup(
               true,
               % Use inference limit here as well
-              call_with_inference_limit(nanocop_decides(Formula), 500000, _),
+              call_with_inference_limit(nanocop_decides(Formula), 2000000, _),
               set_prolog_flag(occurs_check, OriginalFlag)
           ),
           _,
@@ -5354,7 +5302,7 @@ prove_tptp_internal(Formula) :-
     ( catch(
           setup_call_cleanup(
               true,
-              call_with_inference_limit(nanocop_decides(Formula), 500000, _),
+              call_with_inference_limit(nanocop_decides(Formula), 2000000, _),
               set_prolog_flag(occurs_check, OriginalFlag)
           ),
           _,

@@ -50,13 +50,13 @@ nanocop_proves(Formula) :-
             % VÉRIFIER le résultat
             Result='Theorem'
         ),
-        500000,
+        2000000,
         InfResult
     ),
     % VÉRIFIER SI LIMITE ATTEINTE
     ( InfResult == inference_limit_exceeded ->
         nl,
-        write('❌ INFERENCE LIMIT EXCEEDED (500,000 inferences)'), nl,
+        write('❌ INFERENCE LIMIT EXCEEDED (2,000,000 inferences)'), nl,
         write('   Formula too complex or invalid'), nl,
         nl,
         fail
@@ -144,7 +144,7 @@ output_result(Formula, Matrix, Proof, Result) :-
     ;
         nl,
         format('╔═══════════════════════════════════════════════════════════════╗~n'),
-        format('║                    NANOCOP THEOREM PROVER                     ║~n'),
+        format('                    NANOCOP THEOREM PROVER                       ~n'),
         format('╚═══════════════════════════════════════════════════════════════╝~n~n'),
         write('Formula:         '), write(Formula), nl,
         write('Result:    '), write(Result), nl, nl,
