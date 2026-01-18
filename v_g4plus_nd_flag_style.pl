@@ -466,7 +466,7 @@ fitch_g4_proof(lex_lor((Premisses > [Goal]), SP1, SP2), Context, Scope, CurLine,
     assert_safe_fitch_line(DisjElim, Goal, lor(WitLine, CaseAStart, CaseBStart, GoalA, GoalB), NewScope),
     render_have(NewScope, Goal, DisjJust, EndB, DisjElim, V3, V4),
     ElimLine is DisjElim + 1,
-    % CORRECTION: Utiliser le vrai ExistLine trouvé avec find_context_line
+    % CORRECTION: Use the actual ExistLine found with find_context_line
     format(atom(ExistJust), '$ \\exists E $ ~w-~w', [WitLine, DisjElim]),
     assert_safe_fitch_line(ElimLine, Goal, lex(ExistLine, WitLine, DisjElim), Scope),
     render_have(Scope, Goal, ExistJust, DisjElim, ElimLine, V4, VarOut),
@@ -493,112 +493,18 @@ fitch_g4_proof(cq_m((Premisses > _), SubProof), Context, Scope, CurLine, NextLin
 % =========================================================================
 
 % Reflexivity
-fitch_g4_proof(eq_refl(D), _Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
-    !,
-    D = [Goal],
-    DerLine is CurLine + 1,
-    assert_safe_fitch_line(DerLine, Goal, eq_refl, Scope),
-    render_have(Scope, Goal, 'Leibniz', CurLine, DerLine, VarIn, VarOut),
-    NextLine = DerLine,
-    ResLine = DerLine.
 
 % Symmetry
-fitch_g4_proof(eq_sym(_G>D), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
-    !,
-    D = [A = B],
-    find_context_line(B = A, Context, EqLine),
-    DerLine is CurLine + 1,
-    assert_safe_fitch_line(DerLine, (A = B), eq_sym(EqLine), Scope),
-    format(atom(Just), 'Leibniz ~w', [EqLine]),
-    render_have(Scope, (A = B), Just, CurLine, DerLine, VarIn, VarOut),
-    NextLine = DerLine,
-    ResLine = DerLine.
 
 % Transitivity
-fitch_g4_proof(eq_trans(G>D), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
-    !,
-    D = [A = C],
-    G = [A = B, B = C | _Rest],  % Pattern matching direct
-    find_context_line(A = B, Context, Line1),
-    find_context_line(B = C, Context, Line2),
-    DerLine is CurLine + 1,
-    assert_safe_fitch_line(DerLine, (A = C), eq_trans(Line1, Line2), Scope),
-    format(atom(Just), 'Leibniz ~w,~w', [Line1, Line2]),
-    render_have(Scope, (A = C), Just, CurLine, DerLine, VarIn, VarOut),
-    NextLine = DerLine,
-    ResLine = DerLine.
 
 % Substitution (Leibniz) - MAIN CASE
-fitch_g4_proof(eq_subst(G>D), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
-    !,
-    D = [Goal],
-    Goal \= (_ = _),  % Not an equality
-
-    % Extract equality and predicate from G
-    member(A = B, G),
-    member(Pred, G),
-    Pred \= (_ = _),
-    Pred \= (A = B),
-
-    % Verify that Goal is Pred with A replaced by B
-    Pred =.. [PredName|Args],
-    Goal =.. [PredName|GoalArgs],
-
-    % Find the position where substitution occurs
-    nth0(Pos, Args, A),
-    nth0(Pos, GoalArgs, B),
-
-    % Find line numbers in context
-    find_context_line(A = B, Context, EqLine),
-    find_context_line(Pred, Context, PredLine),
-
-    !,
-    DerLine is CurLine + 1,
-    assert_safe_fitch_line(DerLine, Goal, eq_subst(EqLine, PredLine), Scope),
-    format(atom(Just), 'Leibniz ~w,~w', [EqLine, PredLine]),
-    render_have(Scope, Goal, Just, CurLine, DerLine, VarIn, VarOut),
-    NextLine = DerLine,
-    ResLine = DerLine.
 
 % Congruence
-fitch_g4_proof(eq_cong(_G>D), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
-    !,
-    D = [LHS = RHS],
-    LHS =.. [F|ArgsL],
-    RHS =.. [F|ArgsR],
-    find_diff_pos(ArgsL, ArgsR, _Pos, TermL, TermR),
-    find_context_line(TermL = TermR, Context, EqLine),
-    DerLine is CurLine + 1,
-    assert_safe_fitch_line(DerLine, (LHS = RHS), eq_cong(EqLine), Scope),
-    format(atom(Just), 'Leibniz ~w', [EqLine]),
-    render_have(Scope, (LHS = RHS), Just, CurLine, DerLine, VarIn, VarOut),
-    NextLine = DerLine,
-    ResLine = DerLine.
 
 % Substitution in equality
-fitch_g4_proof(eq_subst_eq(G>D), Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
-    !,
-    D = [Goal_LHS = Goal_RHS],
-    member(X = Y, G),
-    member(Ctx_LHS = Ctx_RHS, G),
-    find_context_line(X = Y, Context, XY_Line),
-    find_context_line(Ctx_LHS = Ctx_RHS, Context, Ctx_Line),
-    DerLine is CurLine + 1,
-    assert_safe_fitch_line(DerLine, (Goal_LHS = Goal_RHS), eq_subst_eq(XY_Line, Ctx_Line), Scope),
-    format(atom(Just), 'Leibniz ~w,~w', [XY_Line, Ctx_Line]),
-    render_have(Scope, (Goal_LHS = Goal_RHS), Just, CurLine, DerLine, VarIn, VarOut),
-    NextLine = DerLine,
-    ResLine = DerLine.
 
 % Transitivity chain
-fitch_g4_proof(eq_trans_chain(_G>D), _Context, Scope, CurLine, NextLine, ResLine, VarIn, VarOut) :-
-    !,
-    D = [A = C],
-    DerLine is CurLine + 1,
-    assert_safe_fitch_line(DerLine, (A = C), eq_trans_chain, Scope),
-    render_have(Scope, (A = C), 'Leibniz', CurLine, DerLine, VarIn, VarOut),
-    NextLine = DerLine,
-    ResLine = DerLine.
 % =========================================================================
 % FALLBACK
 % =========================================================================

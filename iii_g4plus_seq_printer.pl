@@ -4,19 +4,6 @@
 % =========================================================================
 
 % =========================================================================
-% ANTISEQUENT RULE (Asq) - exactly like Ax but in red with \nvdash
-% =========================================================================
-
-% Antisequent: counter-model (exactly like axiom)
-render_bussproofs(asq(Seq, _), VarCounter, FinalCounter) :-
-    !,
-    write('\\AxiomC{}'), nl,
-    write('\\RightLabel{\\scriptsize{$\\color{red}{Asq.}$}}'), nl,
-    write('\\UnaryInfC{$\\color{red}{'),
-    render_antisequent(Seq, VarCounter, FinalCounter),
-    write('}$}'), nl.
-
-% =========================================================================
 % G4 rules
 % =========================================================================
 
@@ -214,17 +201,28 @@ render_bussproofs(cq_m(Seq, Proof), VarCounter, FinalCounter) :-
     write('$}'), nl.
 
 % =========================================================================
-% EQUALITY RULE - LEIBNIZ
-% =========================================================================
-% Single equality rule for substitution in predicates.
-% Reflexivity, symmetry, and transitivity are handled via axioms as premises.
+% EQUALITY RULES
 % =========================================================================
 
-% Leibniz substitution
-render_bussproofs(leibniz(Seq), VarCounter, FinalCounter) :-
+% Reflexivity : Seq = [t = t]
+
+% Symmetry
+
+% Simple transitivity
+
+% Chained transitivity
+
+% Congruence
+
+% Substitution in equality
+
+% Substitution (Leibniz)
+
+% Substitution for logical equivalence
+render_bussproofs(equiv_subst(Seq), VarCounter, FinalCounter) :-
     !,
     write('\\AxiomC{}'), nl,
-    write('\\RightLabel{\\scriptsize{Leibniz}}'), nl,
+    write('\\RightLabel{\\scriptsize{$\\equiv$}}'), nl,
     write('\\UnaryInfC{$'),
     render_sequent(Seq, VarCounter, FinalCounter),
     write('$}'), nl.
@@ -247,27 +245,6 @@ render_sequent(Gamma > Delta, VarCounter, FinalCounter) :-
         % Sequent with premisses
         render_formula_list(FilteredGamma, VarCounter, TempCounter),
         write(' \\vdash ')
-    ),
-
-    filter_empty_lists(Delta, FilteredDelta),
-    ( FilteredDelta = [] ->
-        write('\\bot'),
-        FinalCounter = TempCounter
-    ;
-        render_formula_list(FilteredDelta, TempCounter, FinalCounter)
-    ).
-
-% Render antisequent with \nvdash (for refutations)
-render_antisequent(Gamma < Delta, VarCounter, FinalCounter) :-
-    filter_top_from_gamma(Gamma, FilteredGamma0),
-    filter_empty_lists(FilteredGamma0, FilteredGamma),
-
-    ( FilteredGamma = [] ->
-        write(' \\nvdash '),
-        TempCounter = VarCounter
-    ;
-        render_formula_list(FilteredGamma, VarCounter, TempCounter),
-        write(' \\nvdash ')
     ),
 
     filter_empty_lists(Delta, FilteredDelta),

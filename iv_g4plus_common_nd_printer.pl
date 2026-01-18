@@ -289,11 +289,6 @@ find_context_line(Formula, _Context, 0) :-
     !.
 
 find_context_line(Formula, _Context, 0) :-
-    % DEBUG: Show what we're looking for and what's in context
-    % format('% DEBUG find_context_line FAILED:~n', []),
-    % format('%   Searching for: ~w~n', [Formula]),
-    % format('%   Context formulas:~n', []),
-    % forall(member(L:F, Context), format('%     Line ~w: ~w~n', [L, F])),
     format('% WARNING: Formula ~w not found in context~n', [Formula]).
 
 % =========================================================================

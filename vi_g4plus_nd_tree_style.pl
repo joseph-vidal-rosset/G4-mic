@@ -253,30 +253,12 @@ build_tree_from_just(cq_m(Line), _LineNum, Formula, FitchLines, unary_node(cq_m,
     !, build_buss_tree(Line, FitchLines, SubTree).
 
 % -- Equality Rules --
-build_tree_from_just(eq_refl, _LineNum, Formula, _FitchLines, axiom_node(Formula)) :- !.
 
-build_tree_from_just(eq_sym(SourceLine), _LineNum, Formula, FitchLines,
-                     unary_node(eq_sym, Formula, SubTree)) :-
-    !, build_buss_tree(SourceLine, FitchLines, SubTree).
 
-build_tree_from_just(eq_trans(Line1, Line2), _LineNum, Formula, FitchLines,
-                     binary_node(eq_trans, Formula, Tree1, Tree2)) :-
-    !, build_buss_tree(Line1, FitchLines, Tree1), build_buss_tree(Line2, FitchLines, Tree2).
 
-build_tree_from_just(eq_subst(Line1, Line2), _LineNum, Formula, FitchLines,
-                     binary_node(eq_subst, Formula, Tree1, Tree2)) :-
-    !, build_buss_tree(Line1, FitchLines, Tree1), build_buss_tree(Line2, FitchLines, Tree2).
 
-build_tree_from_just(eq_cong(SourceLine), _LineNum, Formula, FitchLines,
-                     unary_node(eq_cong, Formula, SubTree)) :-
-    !, build_buss_tree(SourceLine, FitchLines, SubTree).
 
-build_tree_from_just(eq_subst_eq(Line1, Line2), _LineNum, Formula, FitchLines,
-                     binary_node(eq_subst_eq, Formula, Tree1, Tree2)) :-
-    !, build_buss_tree(Line1, FitchLines, Tree1), build_buss_tree(Line2, FitchLines, Tree2).
 
-build_tree_from_just(eq_trans_chain, _LineNum, Formula, _FitchLines,
-                     axiom_node(Formula)) :- !.
 
 % DS: Disjunctive Syllogism (binary rule)
 build_tree_from_just(ds(DisjLine, NegLine), _LineNum, Formula, FitchLines, binary_node(ds, Formula, DisjTree, NegTree)) :-

@@ -1,4 +1,4 @@
-%% File: nanocop_tptp2.pl  -  Version: 1.0  -  Date: 17 January 2017
+%% File: nanocop_tptp2.pl  -  Version: 1.0  -  Date: 16 January 2016
 %%
 %% Purpose: 1. Translate formula from TPTP into leanCoP syntax
 %%          2. Add equality axioms to the given formula
@@ -11,7 +11,7 @@
 %%        leancop_equal(F,G). % where F is a formula and G the
 %%                            %  formula with added equality axioms
 %%
-%% Copyright: (c) 2009-2017 by Jens Otten
+%% Copyright: (c) 2009-2016 by Jens Otten
 %% License:   GNU General Public License
 
 
@@ -141,4 +141,3 @@ collect_func([F|FunL],FL) :-
 union1([],L,L).
 union1([H|L1],L2,L3) :- member(H,L2), !, union1(L1,L2,L3).
 union1([H|L1],L2,[H|L3]) :- union1(L1,L2,L3).
-

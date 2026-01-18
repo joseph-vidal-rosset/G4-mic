@@ -384,22 +384,31 @@ rewrite((?[X-asq(A,B)]:Body), J, K, (' \\exists ' X ' ' C)) :-
     replace_specific_asq(asq(A,B), X, Body, CleanBody),
     rewrite(CleanBody, J, K, C).
 
-% QUANTIFIERS: X-Y format
-rewrite((![X-X]:A), J, K, (' \\forall ' X ' ' C)) :-
+% QUANTIFIERS: X-Y format - generate x, y, z based on counter
+rewrite((![_-_]:A), J, K, (' \\forall ' VarName ' ' C)) :-
     !,
-    rewrite(A, J, K, C).
+    xyz_name(J, VarName),  % Generate x, y, z, x0, y0...
+    J1 is J + 1,
+    rewrite(A, J1, K, C).
 
-rewrite((?[X-X]:A), J, K, (' \\exists ' X ' ' C)) :-
+rewrite((?[_-_]:A), J, K, (' \\exists ' VarName ' ' C)) :-
     !,
-    rewrite(A, J, K, C).
+    xyz_name(J, VarName),
+    J1 is J + 1,
+    rewrite(A, J1, K, C).
 
-rewrite((![X]:A), J, K, (' \\forall ' X ' ' C)) :-
+% QUANTIFIERS: Simple X format - generate x, y, z based on counter
+rewrite((![_]:A), J, K, (' \\forall ' VarName ' ' C)) :-
     !,
-    rewrite(A, J, K, C).  % Keep the same counter
+    xyz_name(J, VarName),
+    J1 is J + 1,
+    rewrite(A, J1, K, C).
 
-rewrite((?[X]:A), J, K, (' \\exists ' X ' ' C)) :-
+rewrite((?[_]:A), J, K, (' \\exists ' VarName ' ' C)) :-
     !,
-    rewrite(A, J, K, C).  % Keep the same counter
+    xyz_name(J, VarName),
+    J1 is J + 1,
+    rewrite(A, J1, K, C).
 % =========================================================================
 % ELEGANT PREDICATE SIMPLIFICATION
 % P(x,y,z) -> Pxyz for all predicates
@@ -436,6 +445,8 @@ all_simple_terms([H|T]) :-
     simple_term(H),
     all_simple_terms(T).
 
+% A simple term is ONLY: atomic, variable, or internal Skolem function
+% User functions like f(a), g(x,y) are NOT simple terms
 simple_term(X) :-
     atomic(X), !.
 simple_term(X) :-
@@ -444,13 +455,7 @@ simple_term(f_sk(_)) :-
     !.
 simple_term(f_sk(_,_)) :-
     !.
-simple_term(X) :-
-    X =.. [F|Args],
-    atom(F),
-    Args \= [],
-    length(Args, Len),
-    Len =< 2,
-    all_simple_terms(Args).
+% No other compound terms are simple - this prevents simplification of user functions
 
 rewrite_args_list([], J, J, []).
 rewrite_args_list([H|T], J, K, [RH|RT]) :-
@@ -537,15 +542,16 @@ rewrite_term(X, J, K, Y) :-
     rewrite_list(L, J, K, R),
     Y =.. [F|R].
 
-% Generateur de noms elegants
+% Generateur de noms elegants pour variables liées
+% Use x, y, z instead of a, b, c to avoid collision with constants
 rewrite_name(K, N) :-
     K < 3,
     !,
-    J is K+0'a,
+    J is K+0'x,  % Generates x, y, z
     char_code(N, J).
 
 rewrite_name(K, N) :-
-    J is (K mod 3)+0'a,
+    J is (K mod 3)+0'x,  % For K >= 3, generates x0, y0, z0, x1, y1, z1...
     H is K div 3,
     number_codes(H, L),
     atom_codes(N, [J|L]).
@@ -683,7 +689,7 @@ fitch_prefix(sequent, LineNum, TotalPremisses, Prefix) :-
 fitch_prefix(theorem, Depth, _, Prefix) :-
     (   Depth > 0
     ->  Prefix = '\\fa \\fh '  % Small flag for hypotheses
-    ;   Prefix = '\\fa '       % Ligne normale au niveau 0
+    ;   Prefix = '\\fa '       % Normal line at level 0
     ).
 
 % =========================================================================

@@ -4289,8 +4289,7 @@ replace_specific_asq(_, _, Term, Term).
 % END OF LATEX UTILITIES FILE
 % =========================================================================
 % =========================================================================
-% LOGIC LEVEL DETECTION - Analyse holophrastique (Quine)
-% Detection automatique : calcul propositionnel vs. calcul des predicats
+% VARIOUS DETECTIONS (Logic level detection, equality, etc. )
 % =========================================================================
 
 :- dynamic formula_level/1.
@@ -4761,6 +4760,9 @@ g4mic_contains_equality_direct(?[_]:A) :- !, g4mic_contains_equality_direct(A).
 % No recursive descent into arbitrary compound terms - only through logical operators
 g4mic_contains_equality_direct(_) :- fail.
 
+%=========================================================================
+% END OF DETECTIONS
+%=========================================================================
 % =========================================================================
 % TPTP FORMAT SUPPORT
 % =========================================================================
@@ -5288,7 +5290,7 @@ prove_tptp_internal(Formula) :-
     !,
     nl,
     write('╔═══════════════════════════════════════════════════════════╗'), nl,
-    write('║   🔍 EQUALITY/FUNCTIONS DETECTED → USING NANOCOP ENGINE  ║'), nl,
+    write('   🔍 EQUALITY/FUNCTIONS DETECTED → USING NANOCOP ENGINE     '), nl,
     write('╚═══════════════════════════════════════════════════════════╝'), nl,
     nl,
     write('🔄 Calling nanoCoP prover...'), nl, nl,

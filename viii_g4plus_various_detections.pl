@@ -1,6 +1,5 @@
 % =========================================================================
-% LOGIC LEVEL DETECTION - Analyse holophrastique (Quine)
-% Detection automatique : calcul propositionnel vs. calcul des predicats
+% VARIOUS DETECTIONS (Logic level detection, equality, etc. )
 % =========================================================================
 
 :- dynamic formula_level/1.
@@ -79,7 +78,58 @@ contains_equality(Term) :-
     member(Arg, Args),
     contains_equality(Arg).
 
-% Fonctions de Skolem
+% Detect USER function symbols (not internal f_sk Skolem functions)
+% A user function is a compound term with arguments that is not:
+%   - A logical connective
+%   - A quantifier
+%   - An internal Skolem function (f_sk)
+%   - A predicate at top level
+contains_user_function(Term) :-
+    compound(Term),
+    Term \= f_sk(_),
+    Term \= f_sk(_,_),
+    Term \= (_ = _),
+    Term \= (~ _),
+    Term \= (_ & _),
+    Term \= (_ | _),
+    Term \= (_ => _),
+    Term \= (_ <=> _),
+    Term \= (![_]:_),
+    Term \= (?[_]:_),
+    % Now check if Term or its arguments contain functions
+    (   has_function_in_args(Term)
+    ;   Term =.. [_F|Args],
+        Args \= [],
+        member(Arg, Args),
+        contains_user_function(Arg)
+    ).
+
+% Check if a term has function symbols in its arguments
+% This handles cases like p(f(x)) where f(x) is a function inside predicate p
+has_function_in_args(Term) :-
+    compound(Term),
+    Term =.. [_Pred|Args],
+    Args \= [],
+    member(Arg, Args),
+    is_user_function_term(Arg).
+
+% Check if a term itself is a function (not a predicate at top level)
+is_user_function_term(Term) :-
+    compound(Term),
+    Term \= f_sk(_),
+    Term \= f_sk(_,_),
+    Term \= (_ = _),
+    Term \= (~ _),
+    Term \= (_ & _),
+    Term \= (_ | _),
+    Term \= (_ => _),
+    Term \= (_ <=> _),
+    Term \= (![_]:_),
+    Term \= (?[_]:_),
+    Term =.. [_F|Args],
+    Args \= [].
+
+% Keep old name for backward compatibility (Skolem functions only)
 contains_function_symbol(f_sk(_)) :- !.
 contains_function_symbol(f_sk(_,_)) :- !.
 contains_function_symbol(Term) :-
@@ -89,7 +139,7 @@ contains_function_symbol(Term) :-
     contains_function_symbol(Arg).
 
 % =========================================================================
-% FORMULA EXTRACTION FROM A G4 PROOF (in driver now)
+% FORMULA EXTRACTION FROM A G4 PROOF
 % =========================================================================
 
 extract_formula_from_proof(Proof, Formula) :-
@@ -101,7 +151,6 @@ extract_formula_from_proof(Proof, Formula) :-
     ;
         Formula = unknown
     ).
-
 % =========================================================================
 % VALIDATION & WARNINGS MODULE
 % Detection of typing errors and misuse of logical operators
@@ -155,14 +204,15 @@ validate_and_warn(Formula, ValidatedFormula) :-
     check_sequent_syntax_confusion(Formula, SyntaxWarnings),
 
     % Check 2: Biconditional misuse (only in FOL context)
+/*
     detect_fol_context(Formula, IsFOL),
     (   IsFOL ->
         check_bicond_misuse(Formula, BicondWarnings)
     ;   BicondWarnings = []
     ),
-
+*/
     % Combine warnings
-    append(SyntaxWarnings, BicondWarnings, AllWarnings),
+    append(SyntaxWarnings, _BicondWarnings, AllWarnings),
 
     % Handle combined warnings
     handle_warnings(AllWarnings, Mode, ValidatedFormula, Formula).
@@ -395,7 +445,31 @@ print_warning(warning(formula_turnstile, Msg)) :-
     write('      -> Use => for implications, > only for sequents'), nl,
     write('      -> Sequent syntax: [Premisses] > [Conclusions]'), nl.
 
+
+
 % =========================================================================
-% UTILITY: AUTO-SUGGESTION (optional feature)
+% HELPER: DETECTION OF EQUALITY AND FUNCTIONS
 % =========================================================================
-%%% END OF G4MIC PROVER
+
+% Main predicate: decide if formula needs nanoCoP
+% (due to equality or user-defined function symbols)
+g4mic_needs_nanocop(Formula) :-
+    (   g4mic_contains_equality_direct(Formula)
+    ;   contains_user_function(Formula)
+    ), !.
+
+% Equality detection (only descends through logical connectives)
+g4mic_contains_equality_direct(_ = _) :- !.
+g4mic_contains_equality_direct(~A) :- !, g4mic_contains_equality_direct(A).
+g4mic_contains_equality_direct(A & B) :- !, (g4mic_contains_equality_direct(A) ; g4mic_contains_equality_direct(B)).
+g4mic_contains_equality_direct(A | B) :- !, (g4mic_contains_equality_direct(A) ; g4mic_contains_equality_direct(B)).
+g4mic_contains_equality_direct(A => B) :- !, (g4mic_contains_equality_direct(A) ; g4mic_contains_equality_direct(B)).
+g4mic_contains_equality_direct(A <=> B) :- !, (g4mic_contains_equality_direct(A) ; g4mic_contains_equality_direct(B)).
+g4mic_contains_equality_direct(![_]: A) :- !, g4mic_contains_equality_direct(A).
+g4mic_contains_equality_direct(?[_]:A) :- !, g4mic_contains_equality_direct(A).
+% No recursive descent into arbitrary compound terms - only through logical operators
+g4mic_contains_equality_direct(_) :- fail.
+
+%=========================================================================
+% END OF DETECTIONS
+%=========================================================================
